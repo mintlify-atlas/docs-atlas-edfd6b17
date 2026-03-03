@@ -1,0 +1,155 @@
+---
+title: "Action Item"
+description: "Action item model for trackable actions when venue interest threshold is met"
+---
+
+## Overview
+
+The Action Item model represents a trackable action created when enough users (4+) express interest in the same venue. Action items help coordinate group visits by providing a unique reference code and description.
+
+## Model Definition
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the action item (UUID4 format).
+</ResponseField>
+
+<ResponseField name="venue_id" type="string" required>
+  ID of the venue this action item is for. References the `venues` table.
+</ResponseField>
+
+<ResponseField name="interested_user_ids" type="array" required>
+  List of user IDs who expressed interest in this venue.
+  
+  <Expandable title="Array Items">
+    <ResponseField name="[n]" type="string">
+      User ID of someone interested in the venue.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="action_type" type="string" required>
+  Type of action to take. Valid values:
+  - `"book_venue"` - Coordinate booking a reservation
+  - `"visit_venue"` - Coordinate visiting the venue
+</ResponseField>
+
+<ResponseField name="action_code" type="string" required>
+  Unique code for reference (e.g., `"LUNA-venue_1-1234"`). Can be used for bookings or tracking.
+</ResponseField>
+
+<ResponseField name="description" type="string" required>
+  Human-readable description of the action item (e.g., `"3 friends interested - coordinate plans!"`). Provides context about the group size and action.
+</ResponseField>
+
+<ResponseField name="threshold_met" type="boolean" required>
+  Whether the interest threshold was met (typically 4+ users). Always `true` for created action items.
+</ResponseField>
+
+<ResponseField name="status" type="string" required>
+  Current status of the action item. Valid values:
+  - `"pending"` - Action item is active and awaiting user action (API model)
+  - `"active"` - Action item is active and awaiting user action (Database model)
+  - `"completed"` - Action has been completed
+  - `"dismissed"` - User dismissed the action item
+  - `"expired"` - Action item has expired (90 days after creation)
+</ResponseField>
+
+<ResponseField name="created_at" type="datetime" required>
+  Timestamp when the action item was created. Automatically set on creation.
+</ResponseField>
+
+## Validation Rules
+
+- **id**: Required, must be a UUID4 string
+- **venue_id**: Required, must reference an existing venue
+- **interested_user_ids**: Required, must be a non-empty array of user ID strings
+- **action_type**: Required, must be either `"book_venue"` or `"visit_venue"`
+- **action_code**: Required, must be a unique string following format `"LUNA-{venue_id}-{random}"`
+- **description**: Required, must be a non-empty string
+- **threshold_met**: Required, boolean value (typically `true` for created items)
+- **status**: Required, must be one of the valid status values
+- **created_at**: Automatically set to current timestamp on creation
+
+## Example Response
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "venue_id": "venue_1",
+  "interested_user_ids": [
+    "user_1",
+    "user_2",
+    "user_3",
+    "user_4"
+  ],
+  "action_type": "visit_venue",
+  "action_code": "LUNA-venue_1-1234",
+  "description": "4 friends interested - coordinate plans!",
+  "threshold_met": true,
+  "status": "pending",
+  "created_at": "2026-03-03T14:30:00Z"
+}
+```
+
+## Database Storage
+
+Action items are stored in the `action_items` table with additional fields:
+
+<ResponseField name="expires_at" type="datetime" optional>
+  Timestamp when the action item expires (90 days from creation). Action items automatically transition to `"expired"` status after this time.
+</ResponseField>
+
+<ResponseField name="archived_at" type="datetime" optional>
+  Timestamp when the action item was archived (dismissed, expired, or completed). Set when status changes from `"active"` to a terminal state.
+</ResponseField>
+
+### Database Characteristics
+
+- **Primary Key**: `id` (UUID4)
+- **Unique Constraints**: `action_code` must be unique across all action items
+- **Foreign Keys**: `venue_id` references `venues.id` (CASCADE on delete)
+- **Indexes**:
+  - `idx_action_item_venue` on `venue_id` for venue-specific queries
+  - `idx_action_item_status` on `status` for filtering by status
+  - `idx_action_item_expires` on `expires_at` for expiration cleanup
+- **Relationships**:
+  - Many-to-one with venues
+  - One-to-many with confirmations (Go Ahead flow)
+  - One-to-many with chats (group coordination)
+
+## Interest Threshold
+
+Action items are automatically created when the interest threshold is met:
+
+- **Default Threshold**: 4+ users expressing interest in the same venue
+- **Database Threshold**: 5+ users (may vary by configuration)
+- **Threshold Detection**: System monitors interest counts and creates action items when threshold is reached
+- **Deduplication**: Only one active action item exists per venue at a time
+
+## Action Item Lifecycle
+
+1. **Creation** (`status: "active"`)
+   - Created when interest threshold is met
+   - `expires_at` set to 90 days from creation
+   - All interested users notified
+
+2. **Active State** (`status: "active"`)
+   - Users can initiate "Go Ahead" flow
+   - Confirmations tracked in `action_item_confirmations` table
+   - Users can dismiss individually
+
+3. **Terminal States**
+   - **Completed** (`status: "completed"`): Users coordinated and visited venue
+   - **Dismissed** (`status: "dismissed"`): All users dismissed the item
+   - **Expired** (`status: "expired"`): 90 days passed without completion
+   - `archived_at` timestamp set when entering terminal state
+
+## Usage Notes
+
+- Action items are created automatically by the system when interest thresholds are met
+- The `action_code` can be referenced when booking or visiting venues
+- Status transitions from `"pending"`/`"active"` to terminal states (`"completed"`, `"dismissed"`, `"expired"`)
+- The API model uses `"pending"` while the database model uses `"active"` for the same state
+- Interested user IDs are stored as a JSON array in the database
+- Action items expire after 90 days if not completed
+- The "Go Ahead" flow uses the `action_item_confirmations` table to track user responses

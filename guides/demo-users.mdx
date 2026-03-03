@@ -1,0 +1,273 @@
+---
+title: Demo Users
+description: Explore Luna's pre-configured demo users and their unique profiles
+---
+
+Luna includes 15 pre-configured demo users, each with unique interests, locations, and social connections. This guide highlights the primary personas and explains how to use them for testing different app features.
+
+---
+
+## Primary Demo Users
+
+The app features 15 diverse NYC personas. Here are the four most commonly referenced users:
+
+### Alex Chen (user_1)
+
+<Card title="Alex Chen" icon="coffee">
+  **Bio**: Third-wave coffee connoisseur who can tell you the origin story of every bean. Works in tech by day, explores Brooklyn's hidden café gems by weekend. Always hunting for the perfect pour-over.
+  
+  **Interests**: Coffee, Food, Culture
+  
+  **Location**: Times Square area (40.7589°N, 73.9851°W)
+  
+  **Interested Venues**:
+  - Blue Bottle Coffee
+  - Stumptown Coffee
+  - La Colombe Coffee
+</Card>
+
+**Use Case**: Best for testing coffee shop discovery, category filtering, and proximity-based recommendations.
+
+---
+
+### Jordan Kim (user_2)
+
+<Card title="Jordan Kim" icon="utensils">
+  **Bio**: Food blogger with 50k followers and an appetite for adventure. From Michelin stars to hole-in-the-wall dumplings, I eat it all. Life's too short for boring meals!
+  
+  **Interests**: Food, Restaurants, Bars
+  
+  **Location**: East Village (40.7282°N, 73.9942°W)
+  
+  **Interested Venues**:
+  - The Smith
+  - Joe's Pizza
+  - Sushi Nakazawa
+  - Russ & Daughters Café
+  - Carbone
+</Card>
+
+**Use Case**: Ideal for testing restaurant recommendations, food-focused filtering, and high-activity social feeds.
+
+---
+
+### Morgan Park (user_5)
+
+<Card title="Morgan Park" icon="martini-glass">
+  **Bio**: Craft cocktail enthusiast and amateur mixologist. I've tried every speakeasy in Manhattan and can recommend the perfect drink for any mood. Cheers to new adventures!
+  
+  **Interests**: Bars, Nightlife, Food
+  
+  **Location**: Lower East Side (40.7267°N, 73.9834°W)
+  
+  **Interested Venues**:
+  - Dead Rabbit
+  - Employees Only
+  - 230 Fifth Rooftop
+  - Death & Co
+</Card>
+
+**Use Case**: Perfect for testing bar and nightlife features, friend interest signals, and evening venue discovery.
+
+---
+
+### Sam Rivera (user_3)
+
+<Card title="Sam Rivera" icon="champagne-glasses">
+  **Bio**: Social butterfly and nightlife enthusiast. You'll find me at the hottest rooftop bars or underground speakeasies. New in town? I'll show you where the locals really go.
+  
+  **Interests**: Bars, Nightlife, Entertainment
+  
+  **Location**: Midtown Manhattan (40.7489°N, 73.9680°W)
+  
+  **Interested Venues**:
+  - Dead Rabbit
+  - Employees Only
+  - 230 Fifth Rooftop
+  - Death & Co
+  - Comedy Cellar
+</Card>
+
+**Use Case**: Great for testing social features, nightlife recommendations, and overlapping friend interests.
+
+---
+
+## Additional Demo Users
+
+Luna includes 11 additional users with varied interests:
+
+### Taylor Lee (user_4)
+**Focus**: Culture, Museums, Entertainment  
+**Location**: MoMA area  
+**Profile**: Art history PhD student and museum enthusiast
+
+### Casey Wu (user_6)
+**Focus**: Food, Coffee, Parks  
+**Location**: Flatiron District  
+**Profile**: Brunch lifestyle advocate and marketing professional
+
+### Riley Brooks (user_7)
+**Focus**: Culture, Museums, Parks  
+**Location**: Upper West Side  
+**Profile**: Museum member at five institutions, architecture nerd
+
+### Quinn Davis (user_8)
+**Focus**: Food, Bars, Entertainment  
+**Location**: Financial District  
+**Profile**: Finance professional with surprising appreciation for good food
+
+### Blake Martinez (user_9)
+**Focus**: Entertainment, Culture, Food  
+**Location**: Theater District  
+**Profile**: Broadway fanatic who's seen Hamilton 12 times
+
+### Devon Patel (user_10)
+**Focus**: Parks, Coffee, Food  
+**Location**: Central Park area  
+**Profile**: Outdoor enthusiast, runner, and yogi
+
+### Skylar Thompson (user_11)
+**Focus**: Entertainment, Bars, Culture  
+**Location**: Brooklyn  
+**Profile**: Photographer documenting the city's hidden corners
+
+### Harper Chen (user_12)
+**Focus**: Parks, Culture, Coffee  
+**Location**: Midtown East  
+**Profile**: Urban planner passionate about walkable neighborhoods
+
+### River Jordan (user_13)
+**Focus**: Entertainment, Bars, Food  
+**Location**: Greenwich Village  
+**Profile**: Stand-up comedian finding material in NYC chaos
+
+### Sage Rodriguez (user_14)
+**Focus**: Parks, Bars, Food  
+**Location**: Chelsea  
+**Profile**: Wellness coach balancing green juice and craft beer
+
+### Phoenix Lee (user_15)
+**Focus**: Entertainment, Culture, Coffee  
+**Location**: East Village  
+**Profile**: Jazz aficionado and vinyl collector
+
+---
+
+## Friend Network
+
+All 15 demo users are friends with each other, creating a complete social graph. This means:
+- Every user sees activities from 14 friends in their social feed
+- Friend interest signals appear on all venue cards
+- Action items can trigger when 5+ users from the network express interest
+
+**Total Friendships**: 105 bidirectional connections (15 users × 14 friends each ÷ 2)
+
+---
+
+## Switching Between Users
+
+You can switch between demo users at any time to test different perspectives:
+
+<Steps>
+  <Step title="Navigate to Profile Tab">
+    Tap the **Profile** icon in the bottom tab bar (rightmost tab).
+  </Step>
+  
+  <Step title="Tap User Name">
+    Tap your current user name at the top of the profile screen.
+  </Step>
+  
+  <Step title="Select New User">
+    Choose any of the 15 demo users from the user switcher modal.
+  </Step>
+</Steps>
+
+The app will immediately reload all data with the new user's perspective:
+- Personalized recommendations based on their interests
+- Distance calculations from their location
+- Friend activity feed from their social network
+- Action items relevant to their interested venues
+
+---
+
+## Testing Scenarios by User
+
+### Scenario 1: Coffee Lover Experience
+**User**: Alex Chen (user_1)  
+**What to Test**:
+- Category filter for "Coffee Shop"
+- Proximity sorting (4 coffee shops nearby)
+- Friend signals (other coffee lovers: Casey, Devon, Harper, Phoenix)
+- Match meter scores (should show high scores for coffee venues)
+
+### Scenario 2: Restaurant Discovery
+**User**: Jordan Kim (user_2)  
+**What to Test**:
+- "For You" tab personalized recommendations
+- Interest toggling on multiple restaurants
+- Social feed with high activity (Jordan has 5 interested venues)
+- Distance-based sorting from East Village
+
+### Scenario 3: Nightlife & Social
+**User**: Sam Rivera (user_3) or Morgan Park (user_5)  
+**What to Test**:
+- Bar and nightlife venue discovery
+- Friend overlap (both interested in Dead Rabbit, Employees Only, etc.)
+- "Hot Right Now" section in Social tab
+- Action item creation when 5+ users interested
+
+### Scenario 4: Cultural Exploration
+**User**: Taylor Lee (user_4) or Riley Brooks (user_7)  
+**What to Test**:
+- Museum and cultural venue filtering
+- Category matching in recommendations
+- Friend signals from other culture enthusiasts
+- Map view with cultural venues clustered
+
+### Scenario 5: Action Item Triggers
+**Users**: Switch between multiple users  
+**What to Test**:
+1. Start with user_1 (Alex Chen) - express interest in Blue Bottle Coffee
+2. Switch to user_6 (Casey Wu) - also express interest
+3. Continue with user_10, user_12, user_15
+4. When the 5th user expresses interest, an action item should be created
+5. Check Profile tab to see the new action item appear
+
+---
+
+## Data Persistence
+
+<Warning>
+**Local State Only**: Demo user data is stored in the backend's SQLite database (`luna.db`). Each time you switch users, the app fetches fresh data from the API.
+
+To reset all user data:
+1. Stop the backend server
+2. Delete `Luna-Backend/luna.db`
+3. Restart the server (database will be re-seeded automatically)
+</Warning>
+
+---
+
+## User Location Reference
+
+All demo users are located in different NYC neighborhoods to demonstrate distance-based features:
+
+| User | Neighborhood | Latitude | Longitude |
+|------|-------------|----------|----------|
+| Alex Chen | Times Square | 40.7589 | -73.9851 |
+| Jordan Kim | East Village | 40.7282 | -73.9942 |
+| Sam Rivera | Midtown | 40.7489 | -73.9680 |
+| Taylor Lee | MoMA Area | 40.7614 | -73.9776 |
+| Morgan Park | Lower East Side | 40.7267 | -73.9834 |
+| Casey Wu | Flatiron | 40.7431 | -73.9897 |
+| Riley Brooks | Upper West Side | 40.7794 | -73.9632 |
+| Quinn Davis | Financial District | 40.7060 | -74.0088 |
+| Blake Martinez | Theater District | 40.7580 | -73.9855 |
+| Devon Patel | Central Park | 40.7829 | -73.9654 |
+| Skylar Thompson | Brooklyn | 40.6782 | -73.9442 |
+| Harper Chen | Midtown East | 40.7489 | -73.9680 |
+| River Jordan | Greenwich Village | 40.7308 | -74.0020 |
+| Sage Rodriguez | Chelsea | 40.7411 | -74.0006 |
+| Phoenix Lee | East Village | 40.7282 | -73.9942 |
+
+These locations create realistic distance calculations for the proximity-based recommendation algorithm.

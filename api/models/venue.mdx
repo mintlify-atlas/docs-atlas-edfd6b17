@@ -1,0 +1,108 @@
+---
+title: "Venue"
+description: "Venue model representing a place users can discover and visit"
+---
+
+## Overview
+
+The Venue model represents a physical location that users can discover, express interest in, and visit. Venues include geographic coordinates for distance calculations and support both single and multi-image galleries.
+
+## Model Definition
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the venue (e.g., `"venue_1"`).
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Name of the venue.
+</ResponseField>
+
+<ResponseField name="category" type="string" required>
+  Category type of the venue (e.g., `"Coffee Shop"`, `"Restaurant"`, `"Bar"`).
+</ResponseField>
+
+<ResponseField name="description" type="string" required>
+  Detailed description of the venue.
+</ResponseField>
+
+<ResponseField name="image" type="string" required>
+  URL to the venue's primary image. Maintained for backward compatibility.
+</ResponseField>
+
+<ResponseField name="images" type="array" optional>
+  List of image URLs for multi-image galleries. Each element is a string URL.
+  
+  <Expandable title="Array Items">
+    <ResponseField name="[n]" type="string">
+      URL to an image of the venue.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="address" type="string" required>
+  Physical address of the venue.
+</ResponseField>
+
+<ResponseField name="latitude" type="float" optional>
+  Geographic latitude coordinate. Valid range: -90 to 90.
+</ResponseField>
+
+<ResponseField name="longitude" type="float" optional>
+  Geographic longitude coordinate. Valid range: -180 to 180.
+</ResponseField>
+
+<ResponseField name="distance_km" type="float" optional>
+  Distance from the user in kilometers. Only included when a `user_id` parameter is provided in the request.
+</ResponseField>
+
+## Validation Rules
+
+- **id**: Required, must be a string
+- **name**: Required, must be a string (max 255 characters in database)
+- **category**: Required, must be a string (max 100 characters in database)
+- **description**: Required, must be a string
+- **image**: Required, must be a valid URL string (max 500 characters in database)
+- **images**: Optional, must be an array of URL strings if provided
+- **address**: Required, must be a string (max 500 characters in database)
+- **latitude**: Optional, must be a float between -90 and 90
+- **longitude**: Optional, must be a float between -180 and 180
+- **distance_km**: Optional, automatically calculated based on user location
+
+## Example Response
+
+```json
+{
+  "id": "venue_1",
+  "name": "Blue Bottle Coffee",
+  "category": "Coffee Shop",
+  "description": "Specialty coffee roaster and retailer known for single-origin beans and pour-over brewing methods.",
+  "image": "https://example.com/images/blue-bottle-main.jpg",
+  "images": [
+    "https://example.com/images/blue-bottle-1.jpg",
+    "https://example.com/images/blue-bottle-2.jpg",
+    "https://example.com/images/blue-bottle-3.jpg"
+  ],
+  "address": "123 Main St, San Francisco, CA 94102",
+  "latitude": 37.7749,
+  "longitude": -122.4194,
+  "distance_km": 2.5
+}
+```
+
+## Database Storage
+
+Venues are stored in the `venues` table with the following characteristics:
+
+- **Primary Key**: `id`
+- **Indexes**: Category is indexed for efficient filtering
+- **Relationships**: 
+  - One-to-many with interests (tracks which users are interested)
+  - One-to-many with action items (tracks group coordination)
+- **Timestamps**: `created_at` timestamp is automatically set on creation
+
+## Usage Notes
+
+- The `image` field is maintained for backward compatibility; new implementations should use the `images` array
+- Geographic coordinates (`latitude`, `longitude`) are required in the database but optional in API responses
+- The `distance_km` field is dynamically calculated and only appears when filtering venues by user location
+- Venues support cascade deletion of related interests and action items

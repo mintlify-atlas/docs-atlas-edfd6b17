@@ -1,0 +1,367 @@
+---
+title: 'Booking Coordination'
+description: 'How Luna facilitates group bookings when critical mass is reached'
+icon: 'calendar-check'
+---
+
+Luna's booking coordination system automatically identifies opportunities for group reservations and helps users coordinate plans when venues reach critical mass.
+
+## The 5+ User Threshold
+
+Booking coordination activates when venue interest reaches a specific threshold:
+
+<Card title="Critical Mass Detection" icon="users">
+When 5 or more users express interest in the same venue, Luna's booking agent recognizes this as an actionable group size and triggers coordination workflows.
+</Card>
+
+### Why This Matters
+
+Group reservations benefit everyone:
+
+- **For Users** - Better table placement, group discounts, coordinated experience
+- **For Venues** - Predictable large-party bookings, reduced no-shows
+- **For Luna** - Demonstrates platform value through real-world coordination
+
+## Booking Agent Architecture
+
+The booking agent (`agent.py`) is a serverless function that activates during the interest toggle flow:
+
+### Trigger Points
+
+```python
+def action_item_agent(
+    venue_id: str,
+    interested_user_ids: List[str],
+    venue_name: str,
+    venue_category: str
+) -> Dict:
+    threshold = 5
+    user_count = len(interested_user_ids)
+    
+    if user_count < threshold:
+        return {"action_item_created": False}
+    
+    # Create action item...
+```
+
+The agent only activates when `len(interested_user_ids) >= 5`.
+
+### Idempotency Protection
+
+To prevent duplicate action items:
+
+<Steps>
+  <Step title="Check Existing">
+    Before creating, query for active action items on this venue:
+    ```sql
+    SELECT * FROM action_items 
+    WHERE venue_id = ? AND status = 'active'
+    ```
+  </Step>
+  <Step title="Skip If Exists">
+    If an active action item already exists, return `action_item_created: false`
+  </Step>
+  <Step title="Create New">
+    Only create action item if no active one exists
+  </Step>
+</Steps>
+
+This ensures only one active action item per venue, even if many users toggle interest rapidly.
+
+## Action Item vs. Booking
+
+Important distinction:
+
+<Warning>
+Luna creates **action items**, not actual bookings. Action items notify users of coordination opportunities and provide tools to facilitate booking, but do NOT automatically reserve tables.
+</Warning>
+
+### Action Item Properties
+
+| Property | Description | Example |
+|----------|-------------|---------||
+| `action_item_id` | Unique identifier | "550e8400-e29b-41d4-a716-446655440000" |
+| `action_code` | Shareable reference | "LUNA-venue_1-A3F2B7C9" |
+| `description` | User-facing message | "5 friends interested - coordinate plans!" |
+| `action_type` | Booking vs. visit | "book_venue" or "visit_venue" |
+| `interested_user_ids` | Group member list | ["user_1", "user_2", ...] |
+| `expires_at` | Deadline | 90 days from creation |
+
+## Coordination Flow
+
+Here's how users coordinate bookings:
+
+### Step-by-Step Process
+
+<Steps>
+  <Step title="Interest Reaches Threshold">
+    5th user taps interest button on a venue. Backend detects threshold and creates action item.
+  </Step>
+  <Step title="Action Item Appears">
+    All 5 interested users see the new action item in their Profile tab with badge notification.
+  </Step>
+  <Step title="Group Awareness">
+    Users realize others are interested. Social tab's "Hot Right Now" section highlights the venue.
+  </Step>
+  <Step title="External Coordination">
+    Users coordinate via:
+    - Text messages sharing action code
+    - Social media group chats
+    - In-person discussion
+    - Future: Luna's built-in group chat
+  </Step>
+  <Step title="Venue Contact">
+    One user contacts the venue:
+    - Provides action code for reference
+    - Requests reservation for group size
+    - Confirms date, time, special requests
+  </Step>
+  <Step title="Completion">
+    Coordinating user marks action item as complete. Others can do the same or dismiss if plans changed.
+  </Step>
+</Steps>
+
+## Venue Types & Booking Requirements
+
+Action type determines next steps:
+
+### Book Venue (Reservation Required)
+
+Venues requiring advance booking:
+
+<CardGroup cols={2}>
+  <Card title="Restaurants" icon="utensils">
+    Call ahead with action code, confirm party size and dietary restrictions
+  </Card>
+  <Card title="Bars & Lounges" icon="martini-glass">
+    Request reserved seating area, mention group size for table arrangement
+  </Card>
+  <Card title="Clubs" icon="music">
+    Book VIP table or group entry, coordinate arrival time
+  </Card>
+  <Card title="Cafes" icon="mug-hot">
+    Reserve large table for group meetings or work sessions
+  </Card>
+</CardGroup>
+
+### Visit Venue (No Reservation)
+
+Venues with walk-in access:
+
+<CardGroup cols={2}>
+  <Card title="Museums" icon="landmark">
+    Coordinate arrival time, purchase group tickets if available
+  </Card>
+  <Card title="Parks" icon="tree">
+    Agree on meetup spot and time, plan activities
+  </Card>
+  <Card title="Galleries" icon="palette">
+    Schedule group tour or casual viewing time
+  </Card>
+  <Card title="Shops" icon="bag-shopping">
+    Plan shopping excursion, coordinate transportation
+  </Card>
+</CardGroup>
+
+## Smart Descriptions
+
+The booking agent generates contextual descriptions:
+
+```python
+friend_word = "friends" if user_count > 1 else "friend"
+descriptions = [
+    f"{user_count} {friend_word} interested - coordinate plans!",
+    f"{user_count} {friend_word} ready to go!",
+    f"Goal reached! {user_count} people want to visit",
+    f"Perfect group size - {user_count} interested!"
+]
+description = random.choice(descriptions)
+```
+
+Descriptions adapt to group size and inject energy to encourage action.
+
+## Interested Users List
+
+Action items store the complete list of interested user IDs:
+
+### Structure
+
+```json
+{
+  "interested_user_ids": [
+    "user_1",
+    "user_2",
+    "user_3",
+    "user_4",
+    "user_5"
+  ]
+}
+```
+
+### Uses
+
+- **Group Size** - Display accurate headcount
+- **Notifications** - Target push notifications to all interested users
+- **Chat Creation** - Auto-populate group chat participants (future)
+- **Analytics** - Track coordination success rates
+
+<Tip>
+The interested users list is dynamic. If someone toggles off their interest, they remain in the action item's user list (it's a snapshot from creation time).
+</Tip>
+
+## Deep Linking
+
+Action items support deep linking for seamless navigation:
+
+### Link Format
+
+```
+luna://venues/{venue_id}
+```
+
+### Use Cases
+
+1. **Push Notifications** - Tap notification to open venue detail directly
+2. **Share Links** - Send venue link to friends outside Luna
+3. **External Marketing** - Link from social media to specific venues
+
+### Implementation
+
+When Luna receives a deep link:
+
+<Steps>
+  <Step title="Parse URL">
+    Extract venue_id from `luna://venues/{venue_id}`
+  </Step>
+  <Step title="Navigate">
+    Push VenueDetailView onto navigation stack
+  </Step>
+  <Step title="Load Data">
+    Fetch venue details from API
+  </Step>
+  <Step title="Scroll to Action">
+    If action item exists, scroll to action item section
+  </Step>
+</Steps>
+
+## Multi-User Scenarios
+
+How coordination handles complex group dynamics:
+
+### Scenario: Interest Drops Below Threshold
+
+**Question**: What if 2 people lose interest, dropping group to 3 users?
+
+**Answer**: The action item remains active with the original 5 user IDs. It represents a point-in-time snapshot when threshold was met, not a live query.
+
+### Scenario: More Users Join
+
+**Question**: What if interest grows from 5 to 10 users?
+
+**Answer**: The existing action item persists unchanged. No new action item is created (one per venue maximum). The interested count shown is calculated live.
+
+### Scenario: Multiple Dismissals
+
+**Question**: What if everyone dismisses the action item?
+
+**Answer**: Each user's dismissal only affects their own view. The action item record remains in the database with status "dismissed" for that user.
+
+## Future: Group Chat Integration
+
+Planned enhancement for seamless coordination:
+
+### Automatic Chat Creation
+
+When action item triggers:
+
+1. Create group chat for venue
+2. Add all interested users as participants
+3. Post initial message with venue details
+4. Enable real-time messaging for coordination
+
+### Chat Features
+
+- **Date Polling** - Vote on preferred times
+- **RSVP Tracking** - Confirm/decline attendance
+- **Venue Info** - Pinned message with address, hours, action code
+- **Booking Status** - Shared updates when reservation is made
+
+<Note>
+Group chat features are in development. Currently, users coordinate outside Luna using the action code as reference.
+</Note>
+
+## Analytics & Insights
+
+Booking coordination generates valuable metrics:
+
+### Tracked Events
+
+- **Action Item Created** - Venue reached threshold
+- **Action Item Viewed** - User opened action item details
+- **Action Item Completed** - Booking coordinated successfully
+- **Action Item Dismissed** - User declined to participate
+- **Action Item Expired** - 90 days passed without action
+
+### Success Metrics
+
+- **Completion Rate** - % of action items marked complete
+- **Time to Complete** - Average days from creation to completion
+- **Group Size Distribution** - Most common party sizes
+- **Venue Categories** - Which venue types coordinate best
+
+## Best Practices for Venues
+
+Recommendations for venues receiving Luna bookings:
+
+### Recognizing Luna Bookings
+
+<Steps>
+  <Step title="Action Code Format">
+    Look for "LUNA-" prefix in reservation notes or phone inquiries
+  </Step>
+  <Step title="Verify Group Size">
+    Luna action items typically represent 5+ person groups
+  </Step>
+  <Step title="Confirm Details">
+    Ask for action code, venue name, and approximate party size
+  </Step>
+  <Step title="Track Internally">
+    Use action code as reservation reference for follow-up
+  </Step>
+</Steps>
+
+### Providing Great Experience
+
+- **Accommodate Groups** - Reserve appropriate table size
+- **Flexible Timing** - Offer multiple time slots for coordination
+- **Special Touches** - Consider group menus, shared plates, split checks
+- **Feedback** - Ask groups about their Luna experience
+
+## Troubleshooting
+
+### Action Item Not Appearing
+
+**Problem**: 5+ users interested but no action item created
+
+**Solutions**:
+- Check if active action item already exists (only one per venue)
+- Verify backend logs for agent errors
+- Ensure interest count queries correctly
+
+### Wrong Action Type
+
+**Problem**: Restaurant marked as "visit_venue" instead of "book_venue"
+
+**Solutions**:
+- Update venue category to include reservation keyword ("restaurant", "bar", etc.)
+- Agent uses category string matching for type detection
+- Check category field in venue database
+
+### Cannot Complete Action Item
+
+**Problem**: Complete button returns error
+
+**Solutions**:
+- Verify user_id matches interested users list
+- Check action item status is "active" (not already completed)
+- Ensure API endpoint `/action-items/{id}/complete` is reachable

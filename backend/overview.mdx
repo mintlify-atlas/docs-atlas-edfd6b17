@@ -1,0 +1,237 @@
+---
+title: "Backend Overview"
+description: "FastAPI backend architecture with async SQLAlchemy and SQLite"
+---
+
+## Architecture
+
+The Luna backend is built with **FastAPI** and uses **async SQLAlchemy** with SQLite for data persistence. The architecture follows modern async patterns for high performance and scalability.
+
+### Core Technologies
+
+<CardGroup cols={2}>
+  <Card title="FastAPI" icon="bolt">
+    Modern, fast web framework with automatic API documentation
+  </Card>
+  <Card title="SQLAlchemy 2.0" icon="database">
+    Async ORM with aiosqlite driver for non-blocking database operations
+  </Card>
+  <Card title="Pydantic" icon="shield-check">
+    Request/response validation with type safety
+  </Card>
+  <Card title="SQLite" icon="hard-drive">
+    Lightweight database with full-text search and geographic queries
+  </Card>
+</CardGroup>
+
+## Application Structure
+
+```python
+# main.py - FastAPI application with lifespan management
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database and seed data on startup."""
+    logger.info("Starting Luna Backend API...")
+    
+    # Initialize database
+    await init_db()
+    
+    # Check and seed database if needed
+    async with get_db() as session:
+        await check_and_seed(session)
+    
+    logger.info("Luna Backend API ready")
+    yield
+    
+    # Cleanup on shutdown
+    logger.info("Shutting down Luna Backend API...")
+    await close_db()
+
+app = FastAPI(
+    title="Luna Venue Discovery API",
+    description="Backend API for venue discovery and social interest tracking",
+    version="2.0.0",
+    lifespan=lifespan
+)
+```
+
+## Key Features
+
+### 1. Async Database Operations
+
+All database queries use async/await for non-blocking I/O:
+
+```python
+# Example: Get venues with batch loading to avoid N+1 queries
+async with get_db() as session:
+    # Single query to get all venues
+    result = await session.execute(select(VenueDB))
+    venues = result.scalars().all()
+    
+    # Batch load interested counts (1 query instead of N)
+    venue_ids = [venue.id for venue in venues]
+    interested_counts = await batch_get_interested_counts(session, venue_ids)
+```
+
+### 2. Performance Optimization
+
+The backend uses **batch loading** to eliminate N+1 query problems:
+
+```python
+async def batch_get_interested_counts(session, venue_ids: List[str]) -> Dict[str, int]:
+    """Load all interested counts in a single query."""
+    result = await session.execute(
+        select(
+            InterestDB.venue_id,
+            func.count(InterestDB.user_id).label('count')
+        )
+        .where(InterestDB.venue_id.in_(venue_ids))
+        .group_by(InterestDB.venue_id)
+    )
+    
+    counts = {venue_id: count for venue_id, count in result.all()}
+    return {venue_id: counts.get(venue_id, 0) for venue_id in venue_ids}
+```
+
+### 3. CORS Configuration
+
+```python
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+## Core API Endpoints
+
+### Venues
+
+- `GET /venues` - List all venues with filtering and sorting
+- `GET /venues/{venue_id}` - Get detailed venue information
+
+### Interests
+
+- `POST /interests` - Express or toggle interest in a venue
+- `GET /users/{user_id}` - Get user profile with interested venues
+
+### Recommendations
+
+- `GET /recommendations` - Get personalized venue recommendations
+
+### Social Feed
+
+- `GET /activities` - Get friend activity feed
+- `GET /social/feed` - Get comprehensive social feed with highlighted venues
+
+### Action Items
+
+- `POST /action-items/{item_id}/complete` - Complete an action item
+- `DELETE /action-items/{item_id}` - Dismiss an action item
+
+## Request/Response Models
+
+```python
+from pydantic import BaseModel, validator
+
+class InterestRequest(BaseModel):
+    """Request model for expressing interest in a venue."""
+    user_id: str
+    venue_id: str
+    
+    @validator('user_id', 'venue_id')
+    def validate_ids(cls, v):
+        """Validate that IDs are not empty and contain only valid characters."""
+        if not v or not v.strip():
+            raise ValueError('ID cannot be empty')
+        if len(v) > 100:
+            raise ValueError('ID too long (max 100 characters)')
+        if not all(c.isalnum() or c == '_' for c in v):
+            raise ValueError('ID contains invalid characters')
+        return v.strip()
+
+class InterestResponse(BaseModel):
+    """Response model after expressing interest."""
+    success: bool
+    message: str
+    action_item: Optional[ActionItemResponse] = None
+```
+
+## Database Session Management
+
+```python
+from contextlib import asynccontextmanager
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+@asynccontextmanager
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """Async context manager for database sessions."""
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        try:
+            yield session
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Database session error: {str(e)}", exc_info=True)
+            raise
+        finally:
+            await session.close()
+```
+
+## Error Handling
+
+```python
+from fastapi import HTTPException
+
+@app.get("/venues/{venue_id}")
+async def get_venue_detail(venue_id: str, user_id: Optional[str] = None):
+    async with get_db() as session:
+        venue = await session.get(VenueDB, venue_id)
+        
+        if not venue:
+            logger.warning(f"Venue not found: {venue_id}")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Venue with id '{venue_id}' not found"
+            )
+        
+        # Return venue data...
+```
+
+## Production Considerations
+
+<Warning>
+The current SQLite setup is suitable for development and moderate production loads. For high-traffic production deployments, consider migrating to PostgreSQL.
+</Warning>
+
+### Recommended Production Stack
+
+- **Database**: PostgreSQL with connection pooling
+- **Caching**: Redis for frequently accessed data
+- **Background Tasks**: Celery for async processing
+- **Monitoring**: Sentry for error tracking
+- **Deployment**: Gunicorn with multiple workers
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Setup Guide" icon="rocket" href="/backend/setup">
+    Learn how to set up and run the backend
+  </Card>
+  <Card title="Database Schema" icon="database" href="/backend/database-schema">
+    Explore all database tables and relationships
+  </Card>
+  <Card title="Recommendation Algorithm" icon="brain" href="/backend/recommendation-algorithm">
+    Understand the scoring system
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/overview">
+    View complete API documentation
+  </Card>
+</CardGroup>

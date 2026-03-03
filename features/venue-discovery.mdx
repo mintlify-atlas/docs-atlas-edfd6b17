@@ -1,0 +1,167 @@
+---
+title: 'Venue Discovery'
+description: 'Browse and explore venues with powerful filtering, sorting, and map views'
+icon: 'magnifying-glass'
+---
+
+The Discover tab is your gateway to exploring venues across multiple categories. With hero cards, dynamic filtering, and interactive map views, finding your next destination is effortless.
+
+## Hero Venue Card
+
+The featured venue displays prominently at the top of your feed with cinematic visual treatment:
+
+- **16:9 Aspect Ratio** - Cinematic image presentation optimized for venue photography
+- **Category Glow** - Dynamic border that pulses with category-specific colors
+- **Watermark Icons** - Subtle category indicators with low opacity overlays
+- **Distance Badges** - See how far venues are from your current location with "Nearby" indicators for venues within 2km
+
+<Tip>
+The hero card automatically features the most popular or highest-rated venue, giving you instant access to trending destinations.
+</Tip>
+
+## Venue Categories
+
+Luna organizes venues into six distinct categories, each with unique visual styling:
+
+<CardGroup cols={2}>
+  <Card title="Coffee" icon="mug-hot">
+    Coffee shops and cafes for your morning routine
+  </Card>
+  <Card title="Restaurant" icon="utensils">
+    Dining establishments for lunch and dinner
+  </Card>
+  <Card title="Bar" icon="martini-glass">
+    Bars, lounges, and nightlife venues
+  </Card>
+  <Card title="Cultural" icon="landmark">
+    Museums, galleries, and cultural spaces
+  </Card>
+  <Card title="Outdoor" icon="tree">
+    Parks, trails, and outdoor activities
+  </Card>
+  <Card title="Entertainment" icon="ticket">
+    Cinemas, theaters, and entertainment venues
+  </Card>
+</CardGroup>
+
+## Filtering & Sorting
+
+Customize your venue discovery with powerful filtering options:
+
+### Category Filter
+
+Quickly filter venues by tapping category pills in the horizontal scroll bar. Each category displays:
+- Category name with color-coded badge
+- Live count of available venues
+- Visual feedback on selection
+
+### Advanced Filters
+
+Access the filter sheet for more granular control:
+
+<Steps>
+  <Step title="Distance Radius">
+    Set a maximum distance (in kilometers) to only show venues within your preferred travel range. Requires location permissions.
+  </Step>
+  <Step title="Interest Status">
+    Toggle between:
+    - **Only Interested** - Show venues you've marked as interested
+    - **Exclude Interested** - Hide venues you're already interested in
+    - **All Venues** - No interest-based filtering
+  </Step>
+  <Step title="Friend Interest">
+    Filter by minimum number of friends interested in each venue (e.g., show only venues where 3+ friends are interested)
+  </Step>
+</Steps>
+
+### Sort Options
+
+Organize your venue list with four sorting modes:
+
+- **Popularity** (Default) - Sort by total number of interested users
+- **Distance** - Nearest venues first based on your current location
+- **Friends** - Venues where most of your friends are interested appear first
+- **Name** - Alphabetical sorting for easy browsing
+
+<Note>
+The active filter count badge appears on the filter icon when any filters are applied, making it easy to see when you're viewing a filtered list.
+</Note>
+
+## Map View vs List View
+
+Toggle between two distinct viewing modes:
+
+### List View
+
+The default scrollable feed displays venues as cards with:
+- High-quality venue images
+- Category badges with color coding
+- Interested user count
+- Distance from your location
+- Quick-access interest button
+
+### Map View
+
+Switch to map view for geographic context:
+
+- **Interactive Pins** - Tap any venue marker to see details
+- **Venue Clustering** - Nearby venues group together at higher zoom levels
+- **Current Location** - Your position is marked on the map
+- **Pin Colors** - Category-coded markers for quick identification
+
+<Tip>
+Your view preference (List or Map) is automatically saved using AppStorage, so Luna remembers your choice between sessions.
+</Tip>
+
+## Skeleton Loading
+
+While venues load, Luna displays shimmer skeleton cards that:
+- Prevent layout shift during data fetching
+- Show the expected card structure
+- Provide visual feedback that content is loading
+- Use animated gradients for a polished experience
+
+## Pull-to-Refresh
+
+Keep your venue list current by pulling down on the feed:
+
+1. Pull down on the venue list
+2. Feel haptic feedback when refresh triggers
+3. Watch the loading indicator
+4. See updated venue data, including new interest counts
+
+## Performance Optimizations
+
+### Lazy Loading
+
+Venues are loaded using SwiftUI's `LazyVStack`, meaning cards are only rendered when they're about to appear on screen. This ensures smooth scrolling even with large venue lists.
+
+### Batch Queries
+
+The backend uses optimized batch loading to avoid N+1 query problems:
+- Single query for all venue interest counts
+- Single query for all friend interest data
+- Single query for user interest status checks
+
+This architecture ensures the Discover tab loads quickly regardless of how many venues are displayed.
+
+## Empty States
+
+Luna provides helpful guidance when no venues match your criteria:
+
+### No Venues Found
+When the database is empty, you'll see a clear message to check back later.
+
+### Filtered Results Empty
+When your filters exclude all venues, you'll see:
+- An explanation that no venues match your criteria
+- A "Clear Filters" button to reset and start over
+- Summary of active filters for easy troubleshooting
+
+## Error Handling
+
+If venue loading fails, Luna provides:
+- Clear error messages explaining what went wrong
+- A "Retry" button to attempt loading again
+- Alert dialogs when venues are already loaded (to preserve your list)
+- Graceful degradation that never leaves you with a blank screen

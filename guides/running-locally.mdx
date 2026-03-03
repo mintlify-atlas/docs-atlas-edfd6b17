@@ -1,0 +1,207 @@
+---
+title: Running Locally
+description: Step-by-step guide to run Luna on your local machine
+---
+
+This guide walks you through setting up and running the Luna venue discovery application locally, including both the FastAPI backend and iOS app.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+| Component | Requirement | Version |
+|-----------|-------------|----------|
+| **Backend** | Python | 3.10+ |
+| **Backend** | pip | Latest |
+| **iOS** | macOS | Ventura+ |
+| **iOS** | Xcode | 15.0+ |
+| **iOS** | iOS Target | 17.0+ |
+
+---
+
+## Backend Setup
+
+<Steps>
+  <Step title="Navigate to backend directory">
+    ```bash
+    cd Luna-Backend
+    ```
+  </Step>
+
+  <Step title="Run the automated setup script">
+    The setup script creates a virtual environment, installs dependencies, and prepares the database:
+    
+    ```bash
+    chmod +x setup.sh && ./setup.sh
+    ```
+    
+    This script will:
+    - Check your Python version
+    - Create a virtual environment in `venv/`
+    - Upgrade pip to the latest version
+    - Install all dependencies from `requirements.txt`
+  </Step>
+
+  <Step title="Activate the virtual environment">
+    ```bash
+    source venv/bin/activate
+    ```
+    
+    You should see `(venv)` appear in your terminal prompt.
+  </Step>
+
+  <Step title="Start the development server">
+    ```bash
+    uvicorn main:app --reload --port 8000
+    ```
+    
+    The `--reload` flag enables auto-reload when you make code changes.
+  </Step>
+
+  <Step title="Verify the API is running">
+    Open your browser and navigate to:
+    - **API Root**: [http://localhost:8000](http://localhost:8000)
+    - **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+    
+    The Swagger documentation provides an interactive interface to test all API endpoints.
+  </Step>
+</Steps>
+
+### Database Seeding
+
+The setup script automatically creates `luna.db` with seed data:
+- **20+ diverse venues** across 6 categories (Coffee Shop, Restaurant, Bar, Cultural, Park, Entertainment)
+- **15 demo users** with varied interests and locations
+- **Bidirectional friendship connections** between all users
+- **55+ sample interest relationships** and activities
+
+<Info>
+To reset the database, simply delete the `luna.db` file and restart the server. The database will be automatically re-seeded on startup.
+</Info>
+
+---
+
+## iOS App Setup
+
+<Steps>
+  <Step title="Open the Xcode project">
+    ```bash
+    open name.xcodeproj
+    ```
+    
+    This will launch Xcode with the Luna iOS project.
+  </Step>
+
+  <Step title="Select your target device">
+    In Xcode's device selector (top toolbar), choose:
+    - **iPhone 15 Pro** (or any iOS 17+ simulator)
+    - Or connect a **physical iOS 17+ device** via USB
+  </Step>
+
+  <Step title="Configure the API base URL">
+    <Warning>
+    **Critical Configuration Step**: You must update the API base URL or the app won't be able to connect to your backend.
+    </Warning>
+    
+    Open `name/Services/APIService.swift` and locate line 137:
+    
+    ```swift
+    private let baseURL: String
+    ```
+    
+    Update the default value in the initializer:
+    
+    **For iOS Simulator**:
+    ```swift
+    nonisolated init(baseURL: String = "http://localhost:8000", session: URLSession = .shared) {
+    ```
+    
+    **For Physical Device**:
+    ```swift
+    nonisolated init(baseURL: String = "http://YOUR_LOCAL_IP:8000", session: URLSession = .shared) {
+    ```
+    
+    Replace `YOUR_LOCAL_IP` with your machine's local network IP address.
+  </Step>
+
+  <Step title="Find your local IP address">
+    **On macOS**:
+    1. Open **System Settings** (or System Preferences)
+    2. Navigate to **Network** (or **Wi-Fi**)
+    3. Click **Details** (or **Advanced**) for your active connection
+    4. Look for **IP Address** (e.g., `192.168.1.183`)
+    
+    **Using Terminal**:
+    ```bash
+    ipconfig getifaddr en0  # For Wi-Fi
+    ipconfig getifaddr en1  # For Ethernet
+    ```
+  </Step>
+
+  <Step title="Build and run">
+    Press `Cmd+R` or click the **Play** button in Xcode's toolbar.
+    
+    The app will:
+    - Compile the Swift code
+    - Launch on your selected device/simulator
+    - Display the user switcher on first launch
+  </Step>
+</Steps>
+
+---
+
+## First Launch
+
+When you first launch the Luna app, you'll see the **User Switcher** screen with 15 demo users to choose from. Each user has:
+- Different location coordinates (various NYC neighborhoods)
+- Unique interest preferences (coffee, food, bars, culture, parks, entertainment)
+- Pre-populated interested venues
+- Complete friend network with all other users
+
+Select any user (e.g., Alex Chen, Jordan Kim, Morgan Park, or Sam Rivera) to start exploring the app with their personalized data.
+
+<Info>
+**Switching Users**: You can change users at any time from the Profile tab by tapping the user name at the top of the screen.
+</Info>
+
+---
+
+## Network Configuration Details
+
+### Why Simulators Can Use Localhost
+
+iOS Simulators run on your Mac, so they can access services on `localhost` or `127.0.0.1` directly.
+
+### Why Physical Devices Need Local IP
+
+Physical devices are separate machines on your network. They can't access your Mac's `localhost`, so you must:
+1. Use your Mac's **local network IP address** (e.g., `192.168.1.183`)
+2. Ensure your **Mac and iPhone are on the same Wi-Fi network**
+3. Check that no firewall is blocking port 8000
+
+<Warning>
+**Firewall Issues**: If your physical device can't connect, you may need to allow incoming connections on port 8000 in your Mac's Firewall settings.
+</Warning>
+
+---
+
+## Verification Checklist
+
+Before reporting issues, verify:
+
+- [ ] Backend server is running on port 8000
+- [ ] You can access http://localhost:8000/docs in your browser
+- [ ] API base URL in `APIService.swift` is correct for your setup
+- [ ] Physical devices are on the same Wi-Fi network as your Mac
+- [ ] No firewall is blocking port 8000
+- [ ] Python 3.10+ is installed (`python3 --version`)
+- [ ] Xcode 15.0+ is installed with iOS 17 SDK
+
+---
+
+## Next Steps
+
+Now that Luna is running locally:
+- Explore the [Configuration](/guides/configuration) guide to customize settings
+- Learn about the [Demo Users](/guides/demo-users) and their profiles
+- Check the [Troubleshooting](/guides/troubleshooting) guide if you encounter issues

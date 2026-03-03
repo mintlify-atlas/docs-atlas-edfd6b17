@@ -1,0 +1,596 @@
+---
+title: 'State Management'
+description: 'Learn about AppState singleton, @Published properties, and Combine usage in the Luna iOS app'
+---
+
+The Luna iOS app uses a centralized state management approach with the `AppState` singleton and Combine framework for reactive updates.
+
+## AppState Singleton
+
+The `AppState` class is the single source of truth for global application state:
+
+```swift name/ViewModels/AppState.swift
+@MainActor
+class AppState: ObservableObject {
+    // Singleton instance
+    nonisolated(unsafe) static let shared = AppState()
+    
+    // Published properties for reactive updates
+    @Published var currentUserId: String = ""
+    @Published var currentUserName: String = ""
+    @Published var currentUserAvatar: String = ""
+    @Published var interestedVenueIds: Set<String> = []
+    @Published var actionItemCount: Int = 0
+    @Published var selectedTab: Int = 0
+    @Published var isTabBarHidden: Bool = false
+    @Published var socialFeedActivities: [InterestActivity] = []
+    @Published var highlightedVenues: [HighlightedVenue] = []
+    @Published var newSocialActivityCount: Int = 0
+    
+    // Action item toast state
+    @Published var pendingActionItem: ActionItem?
+    @Published var showActionItemToast = false
+    
+    private let apiService: APIServiceProtocol
+    private let authService: AuthenticationServiceProtocol
+    
+    nonisolated private init(
+        apiService: APIServiceProtocol = APIService(),
+        authService: AuthenticationServiceProtocol = MockAuthenticationService.shared
+    ) {
+        self.apiService = apiService
+        self.authService = authService
+        
+        Task { @MainActor in
+            self.currentUserId = authService.getCurrentUserId()
+            self.updateCurrentUserInfo()
+            await loadUserInterests()
+        }
+    }
+}
+```
+
+<Note>
+**@MainActor:** The entire `AppState` class is isolated to the main actor, ensuring all property updates happen on the main thread for safe UI updates.
+</Note>
+
+## Published Properties
+
+### User State
+
+```swift
+// Current user identity
+@Published var currentUserId: String = ""
+@Published var currentUserName: String = ""
+@Published var currentUserAvatar: String = ""
+```
+
+**Usage in Views:**
+
+```swift
+struct ProfileView: View {
+    @ObservedObject private var appState = AppState.shared
+    
+    var body: some View {
+        VStack {
+            AsyncImage(url: URL(string: appState.currentUserAvatar))
+            Text(appState.currentUserName)
+                .font(Theme.Fonts.title)
+        }
+    }
+}
+```
+
+### Interest State
+
+```swift
+// Set of venue IDs the user is interested in
+@Published var interestedVenueIds: Set<String> = []
+
+/// Checks if user is interested in a venue
+func isInterested(in venueId: String) -> Bool {
+    interestedVenueIds.contains(venueId)
+}
+```
+
+**Usage:**
+
+```swift
+let isInterested = appState.isInterested(in: venue.id)
+
+Image(systemName: isInterested ? "heart.fill" : "heart")
+    .foregroundColor(isInterested ? Theme.Colors.error : Theme.Colors.textSecondary)
+```
+
+### Navigation State
+
+```swift
+// Current selected tab (0-3)
+@Published var selectedTab: Int = 0
+
+// Controls tab bar visibility
+@Published var isTabBarHidden: Bool = false
+
+// Deep link venue ID for navigation
+@Published var deepLinkVenueId: String?
+```
+
+**Tab Navigation:**
+
+```swift
+Button("Go to Profile") {
+    appState.selectedTab = 3
+}
+```
+
+**Hide Tab Bar:**
+
+```swift
+struct ChatView: View {
+    @ObservedObject private var appState = AppState.shared
+    
+    var body: some View {
+        VStack { /* Chat UI */ }
+            .onAppear {
+                appState.isTabBarHidden = true
+            }
+            .onDisappear {
+                appState.isTabBarHidden = false
+            }
+    }
+}
+```
+
+### Social Feed State
+
+```swift
+// Friend interest activities
+@Published var socialFeedActivities: [InterestActivity] = []
+
+// Venues that reached interest threshold
+@Published var highlightedVenues: [HighlightedVenue] = []
+
+// Badge count for new activities
+@Published var newSocialActivityCount: Int = 0
+
+// Last viewed timestamp
+@Published var socialFeedLastViewed: Date?
+```
+
+## Interest Management
+
+The `toggleInterest` method demonstrates optimistic updates and error handling:
+
+```swift name/ViewModels/AppState.swift
+@discardableResult
+func toggleInterest(venueId: String, venueInfo: ActivityVenue? = nil) async throws -> InterestResponse {
+    let wasInterested = interestedVenueIds.contains(venueId)
+    
+    // Optimistic update - immediate UI feedback
+    if wasInterested {
+        interestedVenueIds.remove(venueId)
+    } else {
+        interestedVenueIds.insert(venueId)
+    }
+    
+    let socialAction: InterestAction = wasInterested ? .notInterested : .interested
+    
+    do {
+        // Call API to persist change
+        let response = try await apiService.expressInterest(
+            userId: currentUserId,
+            venueId: venueId
+        )
+        
+        // Broadcast to social feed
+        await broadcastInterestToFriends(
+            venueId: venueId,
+            action: socialAction,
+            venue: venueInfo
+        )
+        
+        // Handle action item response
+        if let actionItemData = response.action_item,
+           actionItemData.action_item_created,
+           let itemId = actionItemData.action_item_id {
+            let actionItem = ActionItem(
+                id: itemId,
+                venue_id: venueId,
+                interested_user_ids: actionItemData.interested_user_ids ?? [],
+                action_type: "book_venue",
+                action_code: actionItemData.action_code ?? "",
+                description: actionItemData.description ?? "",
+                threshold_met: true,
+                status: "pending",
+                created_at: ISO8601DateFormatter().string(from: Date()),
+                venue: nil
+            )
+            
+            showActionItemNotification(actionItem)
+        }
+        
+        return response
+    } catch {
+        // Revert optimistic update on error
+        if wasInterested {
+            interestedVenueIds.insert(venueId)
+        } else {
+            interestedVenueIds.remove(venueId)
+        }
+        throw error
+    }
+}
+```
+
+<Accordion title="Optimistic Updates Explained">
+**Optimistic updates** improve perceived performance by updating the UI immediately before waiting for the API response:
+
+1. **Immediate Update**: Modify local state instantly (add/remove from `interestedVenueIds`)
+2. **API Call**: Send request to backend
+3. **Success**: Keep the optimistic update
+4. **Failure**: Revert the change to maintain data consistency
+
+This creates a snappy, responsive UI while maintaining data integrity.
+</Accordion>
+
+## User Switching
+
+The app supports switching between multiple users:
+
+```swift name/ViewModels/AppState.swift
+func switchUser(to userId: String) async {
+    // First, logout to clear all state
+    logout()
+    
+    // Set new user
+    authService.switchUser(to: userId)
+    currentUserId = authService.getCurrentUserId()
+    updateCurrentUserInfo()
+    
+    // Reload data for new user
+    await loadUserInterests()
+    
+    // Check for expired items
+    await ActionItemExpirationManager.checkExpiredItems()
+}
+
+func logout() {
+    // Clear user identity
+    currentUserId = ""
+    currentUserName = ""
+    currentUserAvatar = ""
+    
+    // Clear interests
+    interestedVenueIds.removeAll()
+    
+    // Clear action items
+    pendingActionItem = nil
+    showActionItemToast = false
+    actionItemCount = 0
+    activeActionItems.removeAll()
+    archivedActionItems.removeAll()
+    
+    // Clear social feed data
+    socialFeedActivities.removeAll()
+    highlightedVenues.removeAll()
+    newSocialActivityCount = 0
+    
+    // Reset navigation
+    selectedTab = 0
+    deepLinkVenueId = nil
+}
+```
+
+## Social Feed Broadcasting
+
+When users express interest, the app broadcasts to friends' social feeds:
+
+```swift name/ViewModels/AppState.swift
+func broadcastInterestToFriends(
+    venueId: String,
+    action: InterestAction,
+    venue: ActivityVenue?
+) async {
+    if action == .interested, let venue = venue {
+        let displayName = currentUserName.isEmpty ? "Unknown User" : currentUserName
+        
+        let newActivity = InterestActivity(
+            id: UUID().uuidString,
+            user: ActivityUser(
+                id: currentUserId,
+                name: displayName,
+                avatar: currentUserAvatar
+            ),
+            venue: venue,
+            action: action,
+            timestamp: Date(),
+            isActive: true
+        )
+        
+        // Add to local feed
+        socialFeedActivities.insert(newActivity, at: 0)
+        
+        // Check if venue should be highlighted
+        updateHighlightedVenues(for: venueId, action: action)
+    } else if action == .notInterested {
+        // Remove activity when user removes interest
+        socialFeedActivities.removeAll { 
+            $0.venue.id == venueId && $0.user.id == currentUserId 
+        }
+        
+        updateHighlightedVenues(for: venueId, action: action)
+    }
+}
+```
+
+## Deep Link Handling
+
+The app supports deep links with the `luna://` URL scheme:
+
+```swift name/ViewModels/AppState.swift
+func handleDeepLink(_ url: URL) {
+    guard url.scheme == "luna" else { return }
+    
+    let pathComponents = url.pathComponents.filter { $0 != "/" }
+    
+    // Parse luna://venues/{venue_id}
+    if pathComponents.count == 2,
+       pathComponents[0] == "venues" {
+        deepLinkVenueId = pathComponents[1]
+        print("🔗 Deep link: Opening venue \(pathComponents[1])")
+    }
+}
+```
+
+**Integration in App:**
+
+```swift name/nameApp.swift
+@main
+struct nameApp: App {
+    @ObservedObject private var appState = AppState.shared
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .onOpenURL { url in
+                    appState.handleDeepLink(url)
+                }
+        }
+    }
+}
+```
+
+**Handling in Views:**
+
+```swift
+struct VenueFeedView: View {
+    @ObservedObject private var appState = AppState.shared
+    @State private var showVenueDetail = false
+    
+    var body: some View {
+        NavigationView {
+            // Feed content
+        }
+        .onChange(of: appState.deepLinkVenueId) { venueId in
+            if let venueId = venueId {
+                // Navigate to venue detail
+                showVenueDetail = true
+            }
+        }
+        .sheet(isPresented: $showVenueDetail) {
+            if let venueId = appState.deepLinkVenueId {
+                VenueDetailView(venueId: venueId)
+            }
+        }
+    }
+}
+```
+
+## ViewModel Pattern
+
+ViewModels manage screen-specific state using `@Published` properties:
+
+```swift name/ViewModels/VenueFeedViewModel.swift
+@MainActor
+class VenueFeedViewModel: ObservableObject {
+    @Published var venues: [VenueListItem] = []
+    @Published var filters = VenueFilters()
+    @Published var showFilterSheet = false
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+    @Published var lastUpdated: Date?
+    
+    private let apiService: APIServiceProtocol
+    private let appState: AppState
+    
+    init(apiService: APIServiceProtocol = APIService(), appState: AppState) {
+        self.apiService = apiService
+        self.appState = appState
+    }
+    
+    func loadVenues() async {
+        guard !isLoading else { return }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let fetchedVenues = try await apiService.fetchVenues(
+                userId: appState.currentUserId,
+                filters: filters
+            )
+            self.venues = fetchedVenues
+            self.lastUpdated = Date()
+            self.isLoading = false
+        } catch let error as APIError {
+            self.errorMessage = error.errorDescription
+            self.isLoading = false
+        }
+    }
+}
+```
+
+**View Integration:**
+
+```swift
+struct VenueFeedView: View {
+    @StateObject private var viewModel = VenueFeedViewModel(appState: AppState.shared)
+    
+    var body: some View {
+        NavigationView {
+            Group {
+                if viewModel.isLoading {
+                    ProgressView()
+                } else if let error = viewModel.errorMessage {
+                    ErrorView(message: error)
+                } else {
+                    ScrollView {
+                        LazyVStack {
+                            ForEach(viewModel.venues) { venue in
+                                VenueCardView(venue: venue)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .task {
+            await viewModel.loadVenues()
+        }
+    }
+}
+```
+
+## Combine Usage
+
+While the app primarily uses async/await, Combine is available for reactive programming:
+
+```swift
+import Combine
+
+class ProfileViewModel: ObservableObject {
+    @Published var user: User?
+    @Published var venues: [Venue] = []
+    
+    private var cancellables = Set<AnyCancellable>()
+    private let appState: AppState
+    
+    init(appState: AppState) {
+        self.appState = appState
+        
+        // React to user ID changes
+        appState.$currentUserId
+            .sink { [weak self] userId in
+                self?.loadUserProfile(userId: userId)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func loadUserProfile(userId: String) {
+        Task {
+            // Load profile data
+        }
+    }
+}
+```
+
+## State Property Wrappers
+
+<Tabs>
+  <Tab title="@State">
+    Local view state that persists across view updates:
+    ```swift
+    @State private var isExpanded = false
+    @State private var selectedIndex = 0
+    ```
+    **Use for:** Animation state, temporary UI state, local toggles
+  </Tab>
+  
+  <Tab title="@StateObject">
+    Creates and owns an ObservableObject:
+    ```swift
+    @StateObject private var viewModel = VenueFeedViewModel()
+    ```
+    **Use for:** View-owned ViewModels that persist across view updates
+  </Tab>
+  
+  <Tab title="@ObservedObject">
+    Observes an existing ObservableObject:
+    ```swift
+    @ObservedObject private var appState = AppState.shared
+    ```
+    **Use for:** Shared state objects like AppState (not owned by view)
+  </Tab>
+  
+  <Tab title="@EnvironmentObject">
+    Dependency injected from environment:
+    ```swift
+    @EnvironmentObject var themeManager: ThemeManager
+    ```
+    **Use for:** App-wide dependencies passed down the view hierarchy
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use AppState for Global State">
+    Store user identity, interests, and navigation state in `AppState`:
+    ```swift
+    // ✅ Good
+    @ObservedObject private var appState = AppState.shared
+    let isInterested = appState.isInterested(in: venueId)
+    
+    // ❌ Bad
+    @State private var isInterested = false // Doesn't sync across views
+    ```
+  </Accordion>
+  
+  <Accordion title="Use ViewModels for Screen State">
+    Screen-specific state belongs in ViewModels:
+    ```swift
+    // ✅ Good
+    @StateObject private var viewModel = VenueFeedViewModel()
+    
+    // ❌ Bad - storing screen state in AppState
+    appState.venuesList = [...]
+    ```
+  </Accordion>
+  
+  <Accordion title="Optimistic Updates for UX">
+    Update UI immediately, then sync with API:
+    ```swift
+    // Update local state
+    interestedVenueIds.insert(venueId)
+    
+    // Then sync with API
+    do {
+        try await apiService.expressInterest(...)
+    } catch {
+        // Revert on error
+        interestedVenueIds.remove(venueId)
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="@MainActor for UI Safety">
+    Mark classes with `@MainActor` to ensure thread-safe UI updates:
+    ```swift
+    @MainActor
+    class AppState: ObservableObject {
+        // All updates happen on main thread
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Networking" icon="wifi" href="/ios/networking">
+    Learn about APIService and async/await patterns
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/ios/architecture">
+    Understand MVVM structure and dependency injection
+  </Card>
+</CardGroup>

@@ -1,0 +1,155 @@
+---
+title: 'API Overview'
+description: 'Introduction to the Luna Venue Discovery API'
+---
+
+## Base URL
+
+The Luna API is available at:
+
+```
+http://localhost:8000
+```
+
+For production deployments, replace with your deployed API endpoint.
+
+## Authentication
+
+The current version of the API does not require authentication. All endpoints are publicly accessible.
+
+In production, the API includes CORS middleware configured to:
+- Allow all origins (should be restricted in production)
+- Allow credentials
+- Allow all methods and headers
+
+## Response Format
+
+All API responses are returned in JSON format with appropriate HTTP status codes.
+
+### Success Response
+
+Successful requests return a `200 OK` status code with a JSON response body containing the requested data.
+
+```json
+{
+  "venues": [...],
+  "result_count": 10,
+  "total_venues": 25
+}
+```
+
+### Error Response
+
+Error responses include an HTTP error status code and a JSON body with error details:
+
+```json
+{
+  "detail": "User with id 'invalid_id' not found"
+}
+```
+
+## Common HTTP Status Codes
+
+<ResponseField name="200" type="OK">
+  Request succeeded. Response body contains the requested data.
+</ResponseField>
+
+<ResponseField name="400" type="Bad Request">
+  Invalid request parameters or validation errors.
+</ResponseField>
+
+<ResponseField name="403" type="Forbidden">
+  User not authorized to perform the requested action.
+</ResponseField>
+
+<ResponseField name="404" type="Not Found">
+  Requested resource (user, venue, action item) not found.
+</ResponseField>
+
+<ResponseField name="500" type="Internal Server Error">
+  Server error occurred during request processing.
+</ResponseField>
+
+## Common Response Fields
+
+Many endpoints return venue and user objects with consistent structure:
+
+### Venue Object
+
+```json
+{
+  "id": "venue_1",
+  "name": "Cozy Coffee Corner",
+  "category": "Cafe",
+  "description": "A warm and inviting coffee shop...",
+  "image": "https://images.unsplash.com/...",
+  "images": ["url1", "url2"],
+  "address": "123 Main St, San Francisco, CA",
+  "latitude": 37.7749,
+  "longitude": -122.4194,
+  "interested_count": 5,
+  "distance_km": 2.3
+}
+```
+
+### User Object
+
+```json
+{
+  "id": "user_1",
+  "name": "Alice Johnson",
+  "avatar": "https://i.pravatar.cc/150?img=1",
+  "bio": "Coffee enthusiast and book lover",
+  "interests": ["Cafe", "Restaurant", "Art Gallery"]
+}
+```
+
+## Pagination
+
+Endpoints that return lists support pagination parameters:
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination (1-indexed)
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of items per page (max: 100)
+</ParamField>
+
+Paginated responses include metadata:
+
+```json
+{
+  "activities": [...],
+  "page": 1,
+  "limit": 20,
+  "total_count": 45,
+  "has_more": true
+}
+```
+
+## Database
+
+The API uses:
+- **SQLite** with async support (aiosqlite)
+- **SQLAlchemy 2.0** async ORM
+- Automatic initialization and seeding on first run
+
+## API Version
+
+Current API version: **2.0.0**
+
+Check the health endpoint to verify API status:
+
+```bash
+curl http://localhost:8000/
+```
+
+```json
+{
+  "message": "Luna Venue Discovery API",
+  "status": "running",
+  "version": "2.0.0",
+  "database": "SQLite"
+}
+```

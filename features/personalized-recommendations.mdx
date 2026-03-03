@@ -1,0 +1,206 @@
+---
+title: 'Personalized Recommendations'
+description: 'AI-powered venue suggestions based on your preferences, friends, and location'
+icon: 'sparkles'
+---
+
+The For You tab delivers intelligent venue recommendations tailored to your interests. Using a transparent scoring algorithm, Luna helps you discover venues you'll love while explaining exactly why each suggestion makes sense.
+
+## Match Meter
+
+Each recommended venue displays a visual Match Meter that replaces traditional score badges:
+
+- **Animated Progress Ring** - Smooth animation on card appearance
+- **Color-Coded Tiers** - Visual feedback based on match quality:
+  - **Excellent** (8-10) - Vibrant green indicating top matches
+  - **Great** (6-8) - Blue for strong recommendations
+  - **Good** (4-6) - Orange for solid options
+  - **Fair** (0-4) - Gray for exploratory suggestions
+- **Score Display** - Numeric score (0-10 scale) shown in the center
+
+<Note>
+The Match Meter provides at-a-glance quality assessment without reading detailed breakdowns, speeding up your browsing experience.
+</Note>
+
+## Scoring Algorithm
+
+Luna calculates recommendation scores using a weighted formula with four factors:
+
+### Score Breakdown (10 Points Total)
+
+<CardGroup cols={2}>
+  <Card title="Popularity" icon="fire">
+    **30% weight (3.0 points)**
+    
+    Based on how many other users (excluding you) are interested in the venue. Normalized using `min(other_users / 3, 1.0)` to avoid over-weighting extremely popular venues.
+  </Card>
+  <Card title="Category Match" icon="bullseye">
+    **25% weight (2.5 points)**
+    
+    Binary match comparing venue category against your saved interests. Perfect match earns full points, no match earns zero.
+  </Card>
+  <Card title="Friend Signal" icon="users">
+    **25% weight (2.5 points)**
+    
+    Count of your friends who are interested in this venue. Normalized using `min(friends_interested / 3, 1.0)` to balance social influence.
+  </Card>
+  <Card title="Proximity" icon="location-dot">
+    **20% weight (2.0 points)**
+    
+    Distance-based scoring using the Haversine formula to calculate kilometers from your current location. Closer venues score higher.
+  </Card>
+</CardGroup>
+
+### Formula
+
+```
+final_score = (popularity × 0.30) + (category_match × 0.25) + (friend_signal × 0.25) + (proximity × 0.20)
+```
+
+<Tip>
+Scores are calculated based on OTHER users' interests (excluding yours). This ensures venue positions don't jump around when you toggle your own interest.
+</Tip>
+
+## "Why This?" Explanations
+
+Each recommendation includes a reason string generated from scoring factors:
+
+- **"Popular venue"** - Many users are interested
+- **"Matches your interests"** - Category aligns with your preferences
+- **"X km away"** - Displayed when venue is within 2km
+- **"New venue to explore"** - Default for venues with no special signals
+
+Multiple reasons are combined with commas (e.g., "Popular venue, Matches your interests, 1.2 km away").
+
+## Score Transparency
+
+Tap any recommended venue to see detailed score breakdowns:
+
+### Percentage Breakdown
+
+The score breakdown shows each factor's contribution as a percentage:
+
+- **Popularity**: 0-30% (max contribution)
+- **Category Match**: 0-25% (max contribution)
+- **Friend Signal**: 0-25% (max contribution)
+- **Proximity**: 0-20% (max contribution)
+
+Percentages are calculated from raw scores:
+```
+popularity_pct = (popularity_score / 3.0) × 30
+category_pct = (category_score / 2.5) × 25
+friend_pct = (friend_score / 2.5) × 25
+proximity_pct = (proximity_score / 2.0) × 20
+```
+
+<Note>
+Transparent scoring builds trust and helps you understand why Luna recommends specific venues, empowering better decision-making.
+</Note>
+
+## Dynamic Greeting Header
+
+The For You tab header changes based on time of day:
+
+| Time Range | Greeting |
+|------------|----------|
+| 6:00 AM - 11:00 AM | ☀️ Start your day right |
+| 11:00 AM - 2:00 PM | 🍽 Perfect lunch spots for you |
+| 2:00 PM - 6:00 PM | ✨ Discover something new |
+| 6:00 PM - 10:00 PM | 🌆 Evening plans sorted |
+| 10:00 PM - 6:00 AM | 🌙 Late-night favorites |
+
+This context-aware header makes recommendations feel timely and relevant.
+
+## Category Filtering
+
+Just like in Discover, you can filter recommendations by category:
+
+- Horizontal scrolling category bar
+- Live counts showing matches per category
+- "All" option to clear filters
+- Visual feedback on active selection
+
+## Sorting Options
+
+Organize recommendations with four sort modes:
+
+<Steps>
+  <Step title="Score (Default)">
+    Venues with highest match scores appear first. This is the recommended view that showcases Luna's AI capabilities.
+  </Step>
+  <Step title="Distance">
+    Nearest venues first, helpful when you're ready to go somewhere immediately and proximity matters most.
+  </Step>
+  <Step title="Popularity">
+    Most-interested venues first, useful for finding trending destinations your broader social network loves.
+  </Step>
+  <Step title="Friends">
+    Venues where most of your friends are interested appear first, ideal for group planning.
+  </Step>
+</Steps>
+
+## Visual Rhythm
+
+Recommendation cards use alternating layouts for visual variety:
+
+- **Standard Layout** - Image on top, details below (indices 0, 1, 3, 4, 6, 7...)
+- **Alternate Layout** - Different styling every 3rd card (indices 2, 5, 8...)
+
+This rhythm prevents monotony when browsing long recommendation lists.
+
+## Already Interested Flag
+
+Recommendations include venues you've already marked as interested, with a flag indicating `already_interested: true`. This:
+
+- Keeps venue positions stable (scores don't change when you toggle interest)
+- Shows consistent recommendations across sessions
+- Allows you to rediscover venues you might have forgotten
+
+<Tip>
+Use the advanced filters in Discover tab if you want to exclude venues you're already interested in.
+</Tip>
+
+## Refresh Behavior
+
+Pull-to-refresh on the For You tab:
+
+1. Triggers haptic feedback
+2. Fetches updated venue data
+3. Recalculates scores with latest interest counts
+4. Re-ranks recommendations
+5. Updates friend interest signals
+
+## Empty State
+
+If no recommendations are available (rare), Luna shows:
+
+- A clear "No Recommendations" message
+- Explanation that recommendations appear based on your interests
+- "Explore All Venues" button that navigates to Discover tab
+- Encouragement to express interests to improve recommendations
+
+## Performance Optimizations
+
+The recommendation engine is optimized for speed:
+
+### Backend Efficiency
+- All venues scored in a single API call
+- Batch queries for user interests, friend data, and venue metadata
+- Scores cached during session for instant sorting/filtering
+
+### Frontend Efficiency
+- LazyVStack for on-demand card rendering
+- SwiftUI's built-in view recycling
+- Optimized image loading with caching
+- Debounced category filter changes
+
+## User Preference Learning
+
+Recommendations improve as you use Luna:
+
+1. **Set Interests** - Configure category preferences in Profile tab
+2. **Express Interest** - Mark venues you like to signal preferences
+3. **Friend Network** - Connect with friends to leverage social signals
+4. **Location** - Enable location services for proximity scoring
+
+The more you engage, the more accurate your recommendations become.

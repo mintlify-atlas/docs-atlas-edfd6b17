@@ -1,0 +1,234 @@
+---
+title: 'Recommendations'
+description: 'Endpoints for personalized venue recommendations'
+---
+
+## Get Personalized Recommendations
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/recommendations?user_id=user_1"
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "http://localhost:8000/recommendations",
+    params={"user_id": "user_1"}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Query Parameters
+
+<ParamField query="user_id" type="string" required>
+  User ID to generate personalized recommendations for
+</ParamField>
+
+### Recommendation Algorithm
+
+Recommendations are scored based on **other users' interests only** (excluding the current user). This ensures venue positions don't change when the user toggles their own interest.
+
+**Scoring Factors (out of 10 points):**
+
+- **Popularity (30% = 3.0 points)** - Based on other users interested (excluding current user)
+- **Category Match (25% = 2.5 points)** - Match with user's interest categories
+- **Friend Interest (25% = 2.5 points)** - Number of friends interested
+- **Proximity (20% = 2.0 points)** - Distance from user location
+
+Venues are sorted by total score in descending order. Venues the user is already interested in are included with an `already_interested` flag.
+
+### Response
+
+<ResponseField name="recommendations" type="array">
+  Array of recommendation objects sorted by score (highest first)
+  
+  <Expandable title="Recommendation Object">
+    <ResponseField name="venue" type="object">
+      Complete venue details
+      
+      <Expandable title="Venue Details">
+        <ResponseField name="id" type="string">
+          Venue identifier
+        </ResponseField>
+        
+        <ResponseField name="name" type="string">
+          Venue name
+        </ResponseField>
+        
+        <ResponseField name="category" type="string">
+          Venue category
+        </ResponseField>
+        
+        <ResponseField name="description" type="string">
+          Venue description
+        </ResponseField>
+        
+        <ResponseField name="image" type="string">
+          Primary image URL
+        </ResponseField>
+        
+        <ResponseField name="images" type="array">
+          Array of image URLs for galleries
+        </ResponseField>
+        
+        <ResponseField name="address" type="string">
+          Venue address
+        </ResponseField>
+        
+        <ResponseField name="latitude" type="float">
+          Latitude coordinate
+        </ResponseField>
+        
+        <ResponseField name="longitude" type="float">
+          Longitude coordinate
+        </ResponseField>
+        
+        <ResponseField name="interested_count" type="integer">
+          Total users interested
+        </ResponseField>
+        
+        <ResponseField name="distance_km" type="float">
+          Distance from user in kilometers
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="score" type="float">
+      Recommendation score (0-10)
+    </ResponseField>
+    
+    <ResponseField name="reason" type="string">
+      Human-readable explanation for the recommendation (e.g., "Popular venue, Matches your interests, 1.2 km away")
+    </ResponseField>
+    
+    <ResponseField name="already_interested" type="boolean">
+      Whether the user is already interested in this venue
+    </ResponseField>
+    
+    <ResponseField name="friends_interested" type="integer">
+      Number of user's friends interested
+    </ResponseField>
+    
+    <ResponseField name="total_interested" type="integer">
+      Total number of all users interested
+    </ResponseField>
+    
+    <ResponseField name="score_breakdown" type="object">
+      Detailed breakdown of score components
+      
+      <Expandable title="Score Breakdown">
+        <ResponseField name="popularity" type="float">
+          Popularity score percentage (max 30%)
+        </ResponseField>
+        
+        <ResponseField name="category_match" type="float">
+          Category match score percentage (max 25%)
+        </ResponseField>
+        
+        <ResponseField name="friend_signal" type="float">
+          Friend interest score percentage (max 25%)
+        </ResponseField>
+        
+        <ResponseField name="proximity" type="float">
+          Proximity score percentage (max 20%)
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "recommendations": [
+    {
+      "venue": {
+        "id": "venue_1",
+        "name": "Cozy Coffee Corner",
+        "category": "Cafe",
+        "description": "A warm and inviting coffee shop perfect for remote work.",
+        "image": "https://images.unsplash.com/photo-1...",
+        "images": [
+          "https://images.unsplash.com/photo-1...",
+          "https://images.unsplash.com/photo-2..."
+        ],
+        "address": "123 Main St, San Francisco, CA",
+        "latitude": 37.7749,
+        "longitude": -122.4194,
+        "interested_count": 8,
+        "distance_km": 1.2
+      },
+      "score": 8.5,
+      "reason": "Popular venue, Matches your interests, 1.2 km away",
+      "already_interested": true,
+      "friends_interested": 3,
+      "total_interested": 8,
+      "score_breakdown": {
+        "popularity": 25.0,
+        "category_match": 25.0,
+        "friend_signal": 20.0,
+        "proximity": 18.5
+      }
+    },
+    {
+      "venue": {
+        "id": "venue_5",
+        "name": "Modern Art Gallery",
+        "category": "Art Gallery",
+        "description": "Contemporary art space showcasing local artists.",
+        "image": "https://images.unsplash.com/photo-3...",
+        "images": [
+          "https://images.unsplash.com/photo-3..."
+        ],
+        "address": "456 Gallery Blvd, San Francisco, CA",
+        "latitude": 37.7849,
+        "longitude": -122.4094,
+        "interested_count": 5,
+        "distance_km": 3.5
+      },
+      "score": 6.2,
+      "reason": "Matches your interests",
+      "already_interested": false,
+      "friends_interested": 1,
+      "total_interested": 5,
+      "score_breakdown": {
+        "popularity": 18.0,
+        "category_match": 25.0,
+        "friend_signal": 8.3,
+        "proximity": 12.5
+      }
+    }
+  ]
+}
+```
+
+### Error Responses
+
+<ResponseField name="404" type="Not Found">
+  User with the specified ID does not exist
+</ResponseField>
+
+```json
+{
+  "detail": "User with id 'invalid_user' not found"
+}
+```
+
+## Score Stability
+
+**Critical Behavior**: Recommendation scores are calculated based on **OTHER users' interests only**, excluding the current user. This ensures:
+
+- Venue positions remain stable when the user toggles their interest
+- The `already_interested` flag changes, but scores don't
+- Users can easily find venues they've previously marked as interesting
+
+## Proximity Scoring
+
+Proximity is calculated using the Haversine distance formula:
+- **≤ 2 km**: Maximum proximity score + added to reason string
+- **2-10 km**: Gradually decreasing score
+- **> 10 km**: Minimal proximity score

@@ -1,80 +1,337 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get Luna running locally in under 10 minutes
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
+This quickstart will guide you through setting up Luna's backend and iOS app to explore the demo with 4 pre-configured users and 20+ venues across NYC.
 
-### Step 1: Set up your local environment
+<Note>
+  **Time estimate**: 8-10 minutes
+  
+  **Prerequisites**: macOS Ventura+, Xcode 15.0+, Python 3.10+
+</Note>
+
+## Setup workflow
+
+<Steps>
+  <Step title="Start the backend server">
+    The backend runs on FastAPI and uses SQLite for persistence. An automated setup script handles all configuration.
+
+    ```bash
+    # Navigate to backend directory
+    cd Luna-Backend
+
+    # Run automated setup (creates venv, installs deps, seeds database)
+    chmod +x setup.sh && ./setup.sh
+
+    # Activate virtual environment
+    source venv/bin/activate
+
+    # Start development server with auto-reload
+    uvicorn main:app --reload --port 8000
+    ```
+
+    You should see:
+    ```bash
+    INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+    INFO:     Started reloader process
+    INFO:     Started server process
+    INFO:     Waiting for application startup.
+    INFO:     Application startup complete.
+    ```
+
+    <Note>
+      The setup script automatically creates `luna.db` with 20+ venues, 4 demo users, bidirectional friendships, and sample activity data.
+    </Note>
+
+    **Verify the API is running**:
+    
+    Visit [http://localhost:8000/docs](http://localhost:8000/docs) to see interactive Swagger documentation.
+  </Step>
+
+  <Step title="Configure the iOS app">
+    Open the Xcode project and update the API base URL:
+
+    ```bash
+    # Open Xcode project
+    open name.xcodeproj
+    ```
+
+    In Xcode, navigate to `name/Services/APIService.swift` and update the base URL:
+
+    ```swift name/Services/APIService.swift
+    // MARK: - Configuration
+    
+    // For iOS Simulator
+    private let baseURL = "http://localhost:8000"
+    
+    // For physical iOS device (use your Mac's local IP)
+    // private let baseURL = "http://192.168.1.XXX:8000"
+    ```
+
+    <Warning>
+      **Physical devices**: You must use your Mac's local IP address instead of `localhost`. Find it in **System Settings → Wi-Fi → Details → IP Address**
+    </Warning>
+  </Step>
+
+  <Step title="Build and run the iOS app">
+    In Xcode:
+
+    1. Select target device: **iPhone 15 Pro** (simulator) or your physical iOS 17+ device
+    2. Press **Cmd+R** to build and run
+    3. Wait for the build to complete (~30-60 seconds on first build)
+
+    The app will launch and display the user switcher screen.
+  </Step>
+
+  <Step title="Explore with demo users">
+    Luna includes 4 demo users with different preference profiles:
+
+    **Alex Chen** - Coffee connoisseur  
+    Interests: Coffee shops, cultural venues  
+    Location: Times Square area
+
+    **Jordan Kim** - Food blogger  
+    Interests: Restaurants, bars, food culture  
+    Location: East Village
+
+    **Morgan Taylor** - Night owl  
+    Interests: Bars, entertainment, nightlife  
+    Location: Chelsea
+
+    **Sam Rivera** - Outdoor enthusiast  
+    Interests: Parks, outdoor venues, cultural sites  
+    Location: Upper West Side
+
+    <Tip>
+      Select different users to see how recommendations and social feeds change based on their preferences and friend connections!
+    </Tip>
+  </Step>
+</Steps>
+
+## What to try
+
+Now that Luna is running, explore these key features:
+
+### Discover tab
+
+<CardGroup cols={2}>
+  <Card title="Hero venue card" icon="image">
+    Featured venue with cinematic 16:9 images and category-colored borders
+  </Card>
+  <Card title="Map/List toggle" icon="map">
+    Switch between grid view and interactive MapKit pins
+  </Card>
+  <Card title="Advanced filters" icon="filter">
+    Filter by distance, interest status, and category
+  </Card>
+  <Card title="Sorting options" icon="sort">
+    Sort by popularity, distance, friend count, or alphabetical
+  </Card>
+</CardGroup>
+
+### For You tab
+
+View personalized recommendations with:
+
+- **Match meter visualization** - Animated progress rings showing 0-10 scores
+- **"Why This?" callouts** - Transparent explanations for each recommendation
+- **Score breakdowns** - Tap scores to see popularity, category, friend, and proximity weights
+- **Pull-to-refresh** - Re-rank recommendations with new data
+
+```swift
+// Match meter color tiers
+Excellent (8-10): Green gradient
+Great (6-8):      Blue gradient  
+Good (4-6):       Orange gradient
+Fair (0-4):       Gray gradient
+```
+
+### Social tab
+
+Explore real-time friend activity:
+
+- **"Hot Right Now"** - Venues with 5+ interested friends (triggers booking agent)
+- **Activity timeline** - Friend interests with avatar stacks and timestamps
+- **Auto-refresh** - New activities appear every 30 seconds with toast notifications
+- **Infinite scroll** - Load historical activity by scrolling down
+
+<Tip>
+  To trigger the booking agent: Have 5+ users express interest in the same venue. Switch between demo users and tap the heart icon on a popular venue!
+</Tip>
+
+### Profile tab
+
+Manage your account:
+
+- **Demo user switcher** - Test different personas (Alex, Jordan, Morgan, Sam)
+- **Interested venues grid** - All venues you've favorited with lazy-loaded images
+- **Action items** - Booking coordination tasks (complete or dismiss)
+- **Dark/Light mode** - Toggle theme with persistent preferences
+
+## Understanding the demo data
+
+The seeded database includes:
+
+### Venues (20+)
+
+Across 6 categories:
+- **Coffee shops**: Blue Bottle, Stumptown, Intelligentsia
+- **Restaurants**: Le Bernardin, Eleven Madison Park, Gramercy Tavern
+- **Bars**: Dead Rabbit, Employees Only, PDT
+- **Cultural**: MoMA, Whitney Museum, The Met
+- **Outdoor**: Central Park, High Line, Brooklyn Bridge Park
+- **Entertainment**: Comedy Cellar, Blue Note, Brooklyn Bowl
+
+### Users (4)
+
+All users are friends with each other, creating a fully connected social graph:
+
+```python
+# Bidirectional friendship connections
+Alex ↔ Jordan ↔ Morgan ↔ Sam
+  ↓      ↓        ↓       ↓
+  └──────┴────────┴───────┘
+```
+
+### Sample interests
+
+- Alex: 8 venues (mostly coffee shops and cultural)
+- Jordan: 12 venues (restaurants and bars)
+- Morgan: 10 venues (bars and entertainment)
+- Sam: 7 venues (outdoor and cultural)
+
+<Note>
+  **Triggering action items**: Blue Note Jazz Club and The Dead Rabbit have 5+ interests in the seed data, so they should immediately show "Hot Right Now" status!
+</Note>
+
+## Troubleshooting
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+  <Accordion title="Backend won't start - Port already in use">
+    Another process is using port 8000. Either stop that process or use a different port:
+
+    ```bash
+    # Check what's using port 8000
+    lsof -i :8000
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+    # Kill the process (replace PID with actual process ID)
+    kill -9 <PID>
+    
+    # Or use a different port
+    uvicorn main:app --reload --port 8001
+    ```
+
+    If you change the port, update `baseURL` in `APIService.swift` accordingly.
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+
+  <Accordion title="iOS app can't connect to backend (physical device)">
+    Physical devices can't use `localhost`. You need your Mac's local IP:
+
+    1. Open **System Settings → Wi-Fi → Details** (click the "i" icon)
+    2. Copy your IP address (e.g., `192.168.1.45`)
+    3. Update `APIService.swift`:
+       ```swift
+       private let baseURL = "http://192.168.1.45:8000"
+       ```
+    4. Rebuild the app (Cmd+B) and run
+
+    <Warning>
+      Both devices must be on the same Wi-Fi network!
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Database errors or missing data">
+    Reset the database and re-seed:
+
+    ```bash
+    # Stop the server (Ctrl+C)
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+    # Delete existing database
+    rm luna.db
+    
+    # Restart server (will auto-seed on startup)
+    uvicorn main:app --reload --port 8000
+    ```
+
+    You should see log messages confirming database initialization:
+    ```
+    INFO: Starting Luna Backend API...
+    INFO: Seeding database with initial data...
+    INFO: Created 4 users
+    INFO: Created 20 venues
+    INFO: Luna Backend API ready
+    ```
+  </Accordion>
+
+  <Accordion title="Xcode build errors">
+    Common fixes:
+
+    **"No such module 'Foundation'"**  
+    Clean build folder: **Product → Clean Build Folder** (Cmd+Shift+K)
+
+    **"iOS 17.0 required"**  
+    Update your simulator or device to iOS 17.0+
+
+    **"Signing requires a development team"**  
+    Select your Apple ID in **Signing & Capabilities** → Team
+  </Accordion>
+
+  <Accordion title="Empty screens or no data loading">
+    Check the Xcode console for API errors:
+
+    1. Run the app in Xcode (Cmd+R)
+    2. Open the debug console (Cmd+Shift+Y)
+    3. Look for errors like:
+       - `Network error: Unable to connect to server`
+       - `Invalid URL`
+       - `Request timed out`
+
+    **Common causes:**
+    - Backend server not running
+    - Wrong `baseURL` in `APIService.swift`
+    - Firewall blocking local connections
+
+    **Verify backend is running:**
+    ```bash
+    curl http://localhost:8000/venues
+    ```
+
+    Should return JSON with venue data.
   </Accordion>
 </AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card
+    title="Full installation guide"
+    icon="book"
+    href="/installation"
+  >
+    Detailed setup instructions for development
+  </Card>
+  <Card
+    title="API reference"
+    icon="code"
+    href="/api/overview"
+  >
+    Explore all backend endpoints
+  </Card>
+  <Card
+    title="Architecture overview"
+    icon="diagram-project"
+    href="/ios/architecture"
+  >
+    Learn about Luna's design patterns
+  </Card>
+  <Card
+    title="Recommendation algorithm"
+    icon="brain"
+    href="/backend/recommendation-algorithm"
+  >
+    Deep dive into the scoring system
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

@@ -1,0 +1,330 @@
+---
+title: Configuration
+description: Configure Luna's backend API and iOS app settings
+---
+
+This guide covers all configurable settings for both the Luna backend and iOS application.
+
+---
+
+## iOS App Configuration
+
+### API Base URL
+
+The most critical configuration setting for the iOS app is the API base URL in `APIService.swift`.
+
+**Location**: `name/Services/APIService.swift` (line 137)
+
+```swift
+private let baseURL: String
+private let session: URLSession
+
+nonisolated init(baseURL: String = "http://192.168.1.183:8000", session: URLSession = .shared) {
+    self.baseURL = baseURL
+    // ... rest of initialization
+}
+```
+
+<Warning>
+**Important**: The default value in the code may be set to a specific IP address. You must update this to match your local environment.
+</Warning>
+
+#### Configuration Options
+
+**For iOS Simulator** (running on the same Mac as backend):
+```swift
+nonisolated init(baseURL: String = "http://localhost:8000", session: URLSession = .shared)
+```
+
+**For Physical Device** (iPhone/iPad on same Wi-Fi network):
+```swift
+nonisolated init(baseURL: String = "http://YOUR_MAC_IP:8000", session: URLSession = .shared)
+```
+
+**For Production/Remote Server**:
+```swift
+nonisolated init(baseURL: String = "https://api.yourserver.com", session: URLSession = .shared)
+```
+
+### Network Timeout Settings
+
+The `APIService` includes production-ready timeout configurations:
+
+```swift
+let configuration = URLSessionConfiguration.default
+configuration.timeoutIntervalForRequest = 30.0      // 30 seconds per request
+configuration.timeoutIntervalForResource = 60.0     // 60 seconds total
+configuration.waitsForConnectivity = true           // Wait for network
+```
+
+To modify timeouts, edit these values in `APIService.swift` around line 143.
+
+### Date Decoding Strategy
+
+The app uses a custom ISO8601 date decoder that handles multiple formats:
+- With fractional seconds: `2024-11-20T10:30:00.123Z`
+- Without fractional seconds: `2024-11-20T10:30:00Z`
+- Without timezone suffix (auto-appends Z)
+
+This is configured in `APIService.swift` lines 156-204. No changes needed unless working with a different API format.
+
+---
+
+## Backend Configuration
+
+### Server Settings
+
+The FastAPI backend is configured in `main.py` with the following key settings:
+
+#### CORS Middleware
+
+**Location**: `main.py` (lines 93-99)
+
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+<Warning>
+**Security**: The default `allow_origins=["*"]` setting allows requests from any origin. For production deployments, replace with specific origins:
+
+```python
+allow_origins=[
+    "http://localhost:3000",
+    "https://yourdomain.com"
+]
+```
+</Warning>
+
+#### Logging Configuration
+
+**Location**: `main.py` (lines 49-54)
+
+```python
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+```
+
+To increase log verbosity during development:
+```python
+level=logging.DEBUG  # More detailed logs
+```
+
+### Database Settings
+
+The backend uses SQLite with async support via `aiosqlite`.
+
+**Location**: `database.py`
+
+```python
+DATABASE_URL = "sqlite+aiosqlite:///./luna.db"
+```
+
+#### Database Location
+
+The `luna.db` file is created in the `Luna-Backend/` directory by default. To change the location:
+
+```python
+DATABASE_URL = "sqlite+aiosqlite:////absolute/path/to/luna.db"
+```
+
+#### Connection Pool Settings
+
+For production deployments with PostgreSQL:
+
+```python
+DATABASE_URL = "postgresql+asyncpg://user:password@localhost/luna"
+
+engine = create_async_engine(
+    DATABASE_URL,
+    pool_size=20,              # Max connections
+    max_overflow=10,           # Extra connections when busy
+    pool_pre_ping=True,        # Verify connections before use
+    echo=False                 # Set True for SQL query logging
+)
+```
+
+### Environment Variables
+
+While the current implementation doesn't use environment variables, you can add them for production:
+
+**Create `.env` file**:
+```bash
+# Luna Backend Environment Variables
+DATABASE_URL=sqlite+aiosqlite:///./luna.db
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+LOG_LEVEL=INFO
+PORT=8000
+```
+
+**Load with python-dotenv**:
+```python
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./luna.db")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+```
+
+### Port Configuration
+
+The default port is **8000**. To change:
+
+```bash
+uvicorn main:app --reload --port 8080
+```
+
+<Info>
+**Remember**: If you change the backend port, you must also update the `baseURL` in the iOS `APIService.swift` file.
+</Info>
+
+---
+
+## Recommendation Algorithm Settings
+
+The recommendation scoring algorithm uses configurable weights in `main.py` (lines 449-548).
+
+### Score Weights
+
+```python
+# Factor weights (out of 10 total points)
+popularity_score = popularity_normalized * 3.0    # 30% weight
+category_score = category_match * 2.5              # 25% weight
+friend_score = friend_normalized * 2.5             # 25% weight
+proximity_score = proximity_score_value * 2.0     # 20% weight
+```
+
+To emphasize different factors, adjust these multipliers while keeping the total at 10.0:
+
+**Example: Prioritize friend recommendations**:
+```python
+popularity_score = popularity_normalized * 2.0    # 20% weight
+category_score = category_match * 2.5              # 25% weight
+friend_score = friend_normalized * 3.5             # 35% weight (increased)
+proximity_score = proximity_score_value * 2.0     # 20% weight
+```
+
+### Normalization Constants
+
+```python
+# Normalize popularity (3 users = max score)
+popularity_normalized = min(other_users_interested / 3, 1.0)
+
+# Normalize friend interest (3 friends = max score)
+friend_normalized = min(friends_interested / 3, 1.0)
+```
+
+Adjust the divisors to change sensitivity:
+- **Lower value** = easier to reach max score (more venues score highly)
+- **Higher value** = harder to reach max score (more selective)
+
+---
+
+## Action Item Threshold
+
+The booking agent creates action items when **5 or more users** express interest in a venue.
+
+**Location**: `agent.py`
+
+```python
+def action_item_agent(venue_id: str, interested_user_ids: List[str], 
+                       venue_name: str, venue_category: str) -> dict:
+    if len(interested_user_ids) < 5:
+        return {"action_item_created": False}
+```
+
+To change the threshold:
+```python
+if len(interested_user_ids) < 7:  # Now requires 7 users
+    return {"action_item_created": False}
+```
+
+---
+
+## Social Feed Settings
+
+### Auto-Refresh Polling
+
+The iOS app polls for new activities every 30 seconds by default.
+
+**Location**: `SocialFeedViewModel.swift`
+
+```swift
+private let pollingInterval: TimeInterval = 30.0  // seconds
+```
+
+Adjust for different refresh rates:
+- **More frequent**: `15.0` (every 15 seconds)
+- **Less frequent**: `60.0` (every minute)
+
+### Pagination Settings
+
+API endpoints support pagination with configurable limits.
+
+**Default values** (`main.py`):
+```python
+async def get_social_feed(
+    user_id: str,
+    page: int = 1,
+    limit: int = 20,  # Activities per page
+    since: Optional[str] = None
+):
+    # Validate pagination
+    if limit < 1 or limit > 100:
+        limit = 20  # Max 100 activities per request
+```
+
+---
+
+## Theme and Design System
+
+The iOS app's design system is configured in `Theme.swift`.
+
+### Color Scheme
+
+```swift
+struct ThemeColors {
+    static let primary = Color(hex: "#007AFF")     // iOS Blue
+    static let secondary = Color(hex: "#5856D6")   // Deep Purple
+    static let accent = Color(hex: "#FF4538")      // Coral Red
+}
+```
+
+### Spacing Grid
+
+```swift
+struct Spacing {
+    static let xs: CGFloat = 4
+    static let sm: CGFloat = 8
+    static let md: CGFloat = 16
+    static let lg: CGFloat = 24
+    static let xl: CGFloat = 32
+    static let xxl: CGFloat = 48
+}
+```
+
+---
+
+## Configuration Checklist
+
+Before deploying or sharing your Luna instance:
+
+- [ ] API base URL configured correctly in `APIService.swift`
+- [ ] Backend CORS origins restricted to known domains (production only)
+- [ ] Database URL configured for your environment
+- [ ] Log level appropriate for environment (DEBUG for dev, INFO for prod)
+- [ ] Network timeouts tested and adjusted if needed
+- [ ] Recommendation weights tuned to your preferences
+- [ ] Action item threshold set appropriately
+- [ ] Environment variables configured (if using)

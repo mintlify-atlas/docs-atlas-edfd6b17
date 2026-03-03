@@ -1,0 +1,267 @@
+---
+title: Introduction
+description: Welcome to Luna - A social venue discovery platform for iOS
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="Luna Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="Luna Hero Dark"
+/>
+
+## Welcome to Luna
+
+Luna is a production-ready, full-stack iOS application for discovering venues with intelligent recommendations, real-time social feeds, and automated booking coordination.
+
+The platform combines Swift/SwiftUI on iOS with a Python/FastAPI backend to enable social venue exploration through intelligent matching algorithms, real-time friend activity tracking, and automated group coordination.
+
+## Core features
+
+<CardGroup cols={2}>
+  <Card
+    title="Intelligent discovery"
+    icon="sparkles"
+    href="#intelligent-discovery"
+  >
+    Machine-scored recommendations (0-10 scale) based on preferences, social signals, and proximity
+  </Card>
+  <Card
+    title="Real-time social feeds"
+    icon="users"
+    href="#real-time-social"
+  >
+    Live friend activity timelines with auto-refresh polling and toast notifications
+  </Card>
+  <Card
+    title="Automated coordination"
+    icon="robot"
+    href="#booking-agent"
+  >
+    Booking agent triggers action items when 5+ users express interest in a venue
+  </Card>
+  <Card
+    title="Premium UI/UX"
+    icon="paintbrush"
+    href="#design-system"
+  >
+    Hero cards, match meters, skeleton loading states, and glassmorphic design
+  </Card>
+</CardGroup>
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get the demo running locally in under 10 minutes
+  </Card>
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Detailed setup instructions for backend and iOS app
+  </Card>
+</CardGroup>
+
+## Intelligent discovery
+
+Luna's recommendation engine uses a multi-factor scoring algorithm that combines:
+
+- **Popularity score** (30% weight) - Normalized interested user count
+- **Category match** (25% weight) - Binary match based on user preferences
+- **Friend signal** (25% weight) - Normalized count of friends interested
+- **Proximity** (20% weight) - Distance-based scoring using Haversine formula
+
+```swift
+// Final score calculation
+final_score = (popularity × 0.30) + (category_match × 0.25) + 
+              (friend_count × 0.25) + (proximity × 0.20)
+```
+
+The **For You** tab displays personalized recommendations with transparent scoring breakdowns, match meter visualizations, and "Why This?" callout cards explaining the reasoning behind each suggestion.
+
+## Real-time social
+
+The **Social** tab provides:
+
+- **"Hot Right Now"** section highlighting venues with 5+ interested friends
+- Real-time activity timeline with avatar stacks and timestamp formatting
+- Auto-refresh polling (30-second intervals) with new activity toast notifications
+- Infinite scroll pagination for historical activities
+- Interest activity cards with venue previews and friend avatars
+
+## Booking agent
+
+When 5 or more users express interest in a venue, Luna's booking agent automatically:
+
+1. Detects the interest threshold being reached
+2. Creates persistent action items for all interested users
+3. Generates unique action codes for coordination
+4. Displays toast notifications across the app
+5. Adds items to user profiles for tracking and management
+
+<Note>
+  The booking agent is configurable and can be adjusted based on venue capacity or day/time in production deployments.
+</Note>
+
+## Design system
+
+Luna implements a comprehensive design system ensuring visual consistency:
+
+**Color palette**
+- Primary: iOS Blue (#007AFF)
+- Secondary: Deep Purple (#5856D6)
+- Accent: Coral Red (#FF4538)
+- Category-specific gradients (6 venue types)
+
+**Typography**
+- Rounded system font design
+- 12 predefined text styles (Large Title → Caption2)
+- WCAG-compliant contrast ratios
+
+**Layout constants**
+- 8-point spacing grid (4pt → 48pt)
+- Corner radius system (8pt → 24pt)
+- Icon sizing standards (16pt, 24pt, 32pt)
+
+**Animations**
+- Spring animations with configurable damping
+- Skeleton shimmer effects
+- Tab selection bounces (0.4s response, 0.65 damping)
+
+## Architecture
+
+Luna follows a modern, production-ready architecture:
+
+### iOS app (SwiftUI + MVVM)
+
+- **Views layer**: 11 screens, 20+ reusable components
+- **ViewModels**: AppState singleton + 6 dedicated ViewModels
+- **Services layer**: API, Auth, Analytics, Notifications, Image Cache, Persistence
+- **Zero external dependencies**: Pure SwiftUI/Combine leveraging native frameworks
+
+### Backend (FastAPI + SQLAlchemy)
+
+- **9 REST endpoints**: Venues, interests, recommendations, social feed, users, action items
+- **Async SQLAlchemy ORM** with SQLite persistence
+- **Pydantic v2 validation** with custom validators
+- **CORS middleware** for iOS integration
+- **Database seeding** with 20+ venues and 4 demo users
+
+<CodeGroup>
+
+```swift iOS - API Service
+// APIService.swift - Base URL configuration
+private let baseURL = "http://localhost:8000"
+
+// Generic request handler with type-safe decoding
+func performRequest<T: Decodable>(
+    path: String,
+    method: String = "GET"
+) async throws -> T {
+    guard let url = URL(string: "\(baseURL)\(path)") else {
+        throw APIError.invalidURL
+    }
+    
+    var request = URLRequest(url: url)
+    request.httpMethod = method
+    
+    let (data, response) = try await URLSession.shared.data(for: request)
+    
+    guard let httpResponse = response as? HTTPURLResponse else {
+        throw APIError.unknown
+    }
+    
+    guard httpResponse.statusCode == 200 else {
+        throw APIError.serverError(
+            statusCode: httpResponse.statusCode,
+            message: "Request failed"
+        )
+    }
+    
+    return try JSONDecoder().decode(T.self, from: data)
+}
+```
+
+```python Backend - FastAPI App
+# main.py - FastAPI application initialization
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(
+    title="Luna Venue Discovery API",
+    description="Backend API for venue discovery and social interest tracking",
+    version="2.0.0"
+)
+
+# Add CORS middleware for iOS app integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/venues")
+async def get_venues(
+    user_id: Optional[str] = None,
+    category: Optional[str] = None,
+    session: AsyncSession = Depends(get_db)
+):
+    """Fetch all venues with filtering and sorting options."""
+    # Implementation details...
+```
+
+</CodeGroup>
+
+## Technology stack
+
+### iOS (zero external libraries)
+
+| Framework | Purpose |
+|-----------|----------|
+| **SwiftUI** | Declarative UI with GeometryReader, LazyVGrid, ScrollView |
+| **Combine** | Reactive programming with @Published and sink operators |
+| **Foundation** | URLSession async/await, JSONDecoder, Date formatting |
+| **CoreData** | Local persistence for user preferences and offline caching |
+| **MapKit** | Map rendering with annotations and coordinate regions |
+| **UIKit** | Native haptics via UIImpactFeedbackGenerator |
+
+### Backend
+
+| Package | Version | Purpose |
+|---------|---------|----------|
+| `fastapi` | 0.115.0 | Async web framework with OpenAPI docs |
+| `uvicorn[standard]` | 0.32.0 | ASGI production server |
+| `pydantic` | 2.9.0 | Data validation and settings management |
+| `sqlalchemy` | 2.0.35 | Async ORM with relationship management |
+| `aiosqlite` | 0.20.0 | Async SQLite driver |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Run the quickstart"
+    icon="play"
+    href="/quickstart"
+  >
+    Get Luna running in under 10 minutes
+  </Card>
+  <Card
+    title="Installation guide"
+    icon="wrench"
+    href="/installation"
+  >
+    Complete setup for development
+  </Card>
+</CardGroup>

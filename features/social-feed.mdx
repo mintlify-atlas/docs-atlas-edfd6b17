@@ -1,0 +1,266 @@
+---
+title: 'Social Feed'
+description: 'Real-time activity stream showing friend interests and hot venues'
+icon: 'users'
+---
+
+The Social tab transforms venue discovery into a shared experience. See what your friends are interested in, discover hot venues with critical mass, and coordinate group outings—all in one real-time feed.
+
+## Hot Right Now
+
+The "Hot Right Now" section highlights venues that have reached critical mass within your friend network:
+
+### Threshold Requirements
+
+<Card title="5+ Friends Interested" icon="fire">
+When 5 or more of your friends express interest in the same venue, it automatically appears in the Hot Right Now section, signaling perfect conditions for group coordination.
+</Card>
+
+### Highlighted Venue Cards
+
+Each hot venue displays:
+
+- **Venue Image** - High-quality photo with category context
+- **Venue Details** - Name, category, and address
+- **Friend Count** - Number of interested friends with avatar stack
+- **"View Venue" Button** - Navigate to venue detail page
+- **"Plan Meetup" Button** - Initiate group coordination (coming soon)
+
+<Note>
+The Hot Right Now section only appears when at least one venue meets the 5+ friend threshold, keeping your feed focused and relevant.
+</Note>
+
+## Friend Activity Timeline
+
+The chronological activity feed shows when friends express interest in venues:
+
+### Activity Cards
+
+Each activity displays:
+
+- **Friend Avatar** - Profile picture for quick identification
+- **Friend Name** - Who performed the action
+- **Action Type** - Currently "interested" (future: check-ins, bookings)
+- **Venue Preview** - Image and name of the venue
+- **Timestamp** - Relative time (e.g., "2 hours ago", "Just now")
+- **Active Status** - Green indicator if interest is still active
+
+### Two Activity Sources
+
+<Steps>
+  <Step title="Real-Time Activities">
+    **InterestActivity** feed from AppState
+    
+    Activities generated during your current session appear instantly. When you or your friends toggle interest, the Social feed updates immediately without refresh.
+  </Step>
+  <Step title="Historical Activities">
+    **ActivityDB** records from the backend
+    
+    Activities from before your session started load from the database, providing complete history across app launches.
+  </Step>
+</Steps>
+
+## Auto-Refresh Polling
+
+The Social tab implements intelligent background updates:
+
+### Refresh Interval
+
+- **30-second polling** when tab is visible
+- Automatically pauses when navigating away (battery optimization)
+- Resumes when returning to Social tab
+
+### New Activity Detection
+
+When new activities are detected:
+
+1. Activity count increments
+2. Toast notification appears (implementation pending)
+3. New activities appear at top of feed
+4. Smooth animation as cards slide in
+
+<Tip>
+Auto-refresh happens silently in the background. Pull-to-refresh manually if you want immediate updates.
+</Tip>
+
+## Infinite Scroll Pagination
+
+The activity feed supports pagination for scalability:
+
+### How It Works
+
+<Steps>
+  <Step title="Initial Load">
+    First 20 activities load when opening the Social tab
+  </Step>
+  <Step title="Scroll Detection">
+    When you scroll near the bottom (last visible card), the next page loads automatically
+  </Step>
+  <Step title="Loading Indicator">
+    A subtle spinner appears while fetching more activities
+  </Step>
+  <Step title="End Detection">
+    Pagination stops when all historical activities have loaded
+  </Step>
+</Steps>
+
+### Pagination Parameters
+
+- **Default page size**: 20 activities
+- **Maximum page size**: 100 activities
+- **Minimum page**: 1 (cannot request negative pages)
+
+## Friend Interest Tracking
+
+The Social feed leverages bidirectional friendship data:
+
+### Friendship Model
+
+- **Symmetric Relationships** - If User A is friends with User B, both see each other's activities
+- **Database Structure** - Friendships stored with user_id and friend_id pairs
+- **Query Optimization** - Single query fetches all friend IDs regardless of direction
+
+### Activity Filtering
+
+Only activities from direct friends appear in your feed:
+
+1. Query friendship table for current user
+2. Extract friend IDs from both directions
+3. Filter activities where `user_id IN friend_ids`
+4. Sort by timestamp descending
+
+<Note>
+If you have no friends, the Social tab displays a helpful empty state encouraging you to explore venues and connect.
+</Note>
+
+## Plan Meetup (Coming Soon)
+
+Tapping "Plan Meetup" on a highlighted venue opens a coordination sheet showing:
+
+- Venue details and image
+- Full list of interested friends with avatars
+- Group size count
+- Placeholder for future features:
+  - Group chat creation
+  - Date/time polling
+  - Reservation coordination
+  - Push notifications
+
+<Warning>
+The Plan Meetup feature displays a "Coming Soon" modal. Group chat and coordination features are in development.
+</Warning>
+
+## Empty States
+
+The Social tab provides helpful guidance when content is unavailable:
+
+### No Friends
+
+When you haven't connected with anyone:
+
+- "No Friend Activity Yet" message
+- Explanation of how the Social feed works
+- "Discover Venues" button to navigate to Discover tab
+- Encouragement to express interests to inspire friends
+
+### No Activity
+
+When friends exist but haven't expressed interests:
+
+- "No recent activity from friends" message
+- Encouragement to explore and set an example
+- Suggestion that activity will appear as friends engage
+
+## Skeleton Loading
+
+While the initial activity load completes, Luna displays:
+
+- 5 skeleton activity cards with shimmer animations
+- Accurate card structure matching real activities
+- Smooth transition when real data arrives
+- Prevention of layout shift
+
+## Navigation
+
+Tap any activity card or highlighted venue to:
+
+1. Navigate to the venue detail page
+2. See full venue information
+3. View all interested users (not just friends)
+4. Toggle your own interest
+5. Return to Social feed with back button
+
+### Navigation Path
+
+Luna uses SwiftUI's NavigationStack with path binding:
+
+```swift
+NavigationStack(path: $navigationPath) {
+  // Social feed content
+}
+.navigationDestination(for: String.self) { venueId in
+  VenueDetailView(venueId: venueId)
+}
+```
+
+This enables proper back navigation and deep linking.
+
+## Avatar Stacks
+
+Highlighted venue cards show friend avatars in a horizontal stack:
+
+- Maximum of 5 avatars displayed
+- Overflow indicated with "+X more" badge
+- Circular frames with border
+- Fallback to initials if image unavailable
+
+## Real-Time Synchronization
+
+Activities stay synchronized across app features:
+
+### Interest Toggle Flow
+
+<Steps>
+  <Step title="User Toggles Interest">
+    User taps heart icon in Discover, For You, or Venue Detail
+  </Step>
+  <Step title="API Updates">
+    POST /interests endpoint creates/removes interest record and activity
+  </Step>
+  <Step title="AppState Updates">
+    Global state publishes changes via Combine @Published properties
+  </Step>
+  <Step title="Social Feed Updates">
+    Activity appears/disappears in friend feeds automatically
+  </Step>
+  <Step title="Highlighted Venues Update">
+    If threshold crossed (5+ friends), venue moves to/from Hot Right Now
+  </Step>
+</Steps>
+
+## Performance Optimizations
+
+### Batch Loading
+
+The backend avoids N+1 queries by:
+
+- Loading all friend activities in single query
+- Eager loading user and venue relationships with `selectinload`
+- Calculating highlighted venues with aggregated friend counts
+
+### Frontend Efficiency
+
+- LazyVStack defers card rendering until scrolled into view
+- AsyncImage caching prevents repeated downloads
+- Auto-refresh timer cancelled when leaving tab
+- Debounced scroll detection for pagination
+
+## Analytics Integration
+
+The Social tab tracks key user actions:
+
+- **Highlighted Venue Tap** - Records venue_id when tapping "View Venue"
+- **Plan Meetup Tap** - Tracks coordination attempts
+- **Interest Activity Tap** - Logs engagement with friend activities
+
+These events help understand feature usage and optimize the social experience.

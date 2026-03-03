@@ -1,0 +1,526 @@
+---
+title: Troubleshooting
+description: Common issues and solutions for running Luna locally
+---
+
+This guide addresses the most common issues when running Luna and provides step-by-step solutions.
+
+---
+
+## Backend Issues
+
+<AccordionGroup>
+  <Accordion title="Port 8000 already in use">
+    **Symptom**: Error message when starting uvicorn:
+    ```
+    ERROR: [Errno 48] Address already in use
+    ```
+    
+    **Solutions**:
+    
+    1. **Find the process using port 8000**:
+       ```bash
+       lsof -i :8000
+       ```
+    
+    2. **Kill the conflicting process**:
+       ```bash
+       kill -9 <PID>
+       ```
+       Replace `<PID>` with the process ID from step 1.
+    
+    3. **Or use a different port**:
+       ```bash
+       uvicorn main:app --reload --port 8080
+       ```
+       
+       <Warning>
+       Remember to update the iOS app's `baseURL` in `APIService.swift` if you change the port.
+       </Warning>
+  </Accordion>
+
+  <Accordion title="ModuleNotFoundError: No module named 'fastapi'">
+    **Symptom**: Import errors when starting the backend
+    
+    **Cause**: Virtual environment not activated or dependencies not installed
+    
+    **Solution**:
+    
+    1. **Ensure virtual environment is activated**:
+       ```bash
+       source venv/bin/activate
+       ```
+       You should see `(venv)` in your terminal prompt.
+    
+    2. **Reinstall dependencies**:
+       ```bash
+       pip install -r requirements.txt
+       ```
+    
+    3. **Verify installation**:
+       ```bash
+       pip list | grep fastapi
+       ```
+       Should show `fastapi` and `uvicorn` versions.
+  </Accordion>
+
+  <Accordion title="Database file is locked">
+    **Symptom**: `sqlite3.OperationalError: database is locked`
+    
+    **Cause**: Multiple processes trying to access `luna.db` simultaneously
+    
+    **Solution**:
+    
+    1. **Stop all running backend instances**:
+       ```bash
+       pkill -f "uvicorn main:app"
+       ```
+    
+    2. **Remove any lock files**:
+       ```bash
+       rm luna.db-journal
+       rm luna.db-wal
+       rm luna.db-shm
+       ```
+    
+    3. **Restart the server**:
+       ```bash
+       uvicorn main:app --reload --port 8000
+       ```
+  </Accordion>
+
+  <Accordion title="CORS errors in browser console">
+    **Symptom**: Browser console shows:
+    ```
+    Access to fetch at 'http://localhost:8000' from origin 'http://localhost:3000' 
+    has been blocked by CORS policy
+    ```
+    
+    **Cause**: CORS middleware not configured or origin not allowed
+    
+    **Solution**:
+    
+    Check `main.py` lines 93-99:
+    ```python
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Should allow all origins
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    ```
+    
+    Ensure the middleware is added **before** defining routes.
+  </Accordion>
+
+  <Accordion title="Database not seeding on first launch">
+    **Symptom**: API returns empty arrays for venues/users
+    
+    **Solution**:
+    
+    1. **Check server logs** for seeding messages:
+       ```
+       INFO - Created 15 users with interests
+       INFO - Created 20 venues with coordinates
+       INFO - Database seeding completed successfully
+       ```
+    
+    2. **Manually trigger seeding**:
+       ```bash
+       python3 -c "import asyncio; from database import init_db, get_db; from seed_data import seed_database; asyncio.run(init_db()); session = asyncio.run(get_db().__anext__()); asyncio.run(seed_database(session))"
+       ```
+    
+    3. **Verify database file exists**:
+       ```bash
+       ls -lh luna.db
+       ```
+       Should show a file size > 200KB.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## iOS App Issues
+
+<AccordionGroup>
+  <Accordion title="Unable to connect to server / Network errors">
+    **Symptom**: App shows error alerts:
+    - "Unable to connect to server. Please try again."
+    - "No internet connection. Please check your network."
+    - "Request timed out. Please try again."
+    
+    **Diagnosis**: Check which device type you're using.
+    
+    ### For iOS Simulator
+    
+    1. **Verify backend is running**:
+       ```bash
+       curl http://localhost:8000
+       ```
+       Should return JSON with `{"message": "Luna Venue Discovery API", ...}`
+    
+    2. **Check `APIService.swift` configuration**:
+       ```swift
+       // Should be localhost for simulator
+       nonisolated init(baseURL: String = "http://localhost:8000", ...)
+       ```
+    
+    3. **Test API in Safari on Mac**:
+       Open [http://localhost:8000/docs](http://localhost:8000/docs)
+    
+    ### For Physical Device
+    
+    1. **Confirm both devices on same Wi-Fi**:
+       - Mac Wi-Fi: Settings → Wi-Fi → Network name
+       - iPhone Wi-Fi: Settings → Wi-Fi → Connected network
+       - Must match exactly
+    
+    2. **Get your Mac's IP address**:
+       ```bash
+       ipconfig getifaddr en0  # Wi-Fi
+       ```
+       Example output: `192.168.1.183`
+    
+    3. **Update `APIService.swift`**:
+       ```swift
+       nonisolated init(baseURL: String = "http://192.168.1.183:8000", ...)
+       ```
+    
+    4. **Test from iPhone Safari**:
+       Open Safari and navigate to `http://YOUR_MAC_IP:8000/docs`
+       
+       If this fails, it's a network issue, not an app issue.
+    
+    5. **Check Mac firewall** (if Safari test failed):
+       - System Settings → Network → Firewall
+       - Ensure Python or Terminal is allowed
+       - Or temporarily disable firewall for testing
+  </Accordion>
+
+  <Accordion title="API returns 404 Not Found errors">
+    **Symptom**: Error message: "Content not found" or specific 404 errors
+    
+    **Cause**: Incorrect endpoint paths or missing data
+    
+    **Solutions**:
+    
+    1. **Verify endpoint exists in backend**:
+       Check [http://localhost:8000/docs](http://localhost:8000/docs) for all available endpoints
+    
+    2. **Check for typos in URLs**:
+       Common issues:
+       - `/venues` vs `/venue` (missing 's')
+       - `/users/user_1` vs `/users/1` (incorrect ID format)
+    
+    3. **Verify demo data loaded**:
+       ```bash
+       curl http://localhost:8000/venues | jq length
+       ```
+       Should return `20` (number of venues)
+  </Accordion>
+
+  <Accordion title="App crashes on launch or during navigation">
+    **Symptom**: App immediately crashes or crashes when tapping certain buttons
+    
+    **Solutions**:
+    
+    1. **Check Xcode console for error messages**:
+       - Look for fatal error messages in red
+       - Common issues: force unwrapping nil values, index out of range
+    
+    2. **Clean build folder**:
+       In Xcode: Product → Clean Build Folder (Cmd+Shift+K)
+    
+    3. **Delete derived data**:
+       ```bash
+       rm -rf ~/Library/Developer/Xcode/DerivedData
+       ```
+    
+    4. **Reset simulator**:
+       - Simulator → Device → Erase All Content and Settings
+       - Or via terminal:
+       ```bash
+       xcrun simctl erase all
+       ```
+    
+    5. **Check iOS version compatibility**:
+       - Project requires iOS 17.0+
+       - Xcode → Project Settings → Deployment Target
+  </Accordion>
+
+  <Accordion title="Images not loading / Broken image icons">
+    **Symptom**: Venue cards show placeholder images or broken image icons
+    
+    **Cause**: Unsplash URLs blocked or network issues
+    
+    **Solutions**:
+    
+    1. **Check internet connection**:
+       Images are loaded from `images.unsplash.com`
+    
+    2. **Test image URL in browser**:
+       Copy an image URL from the API response and paste into Safari
+    
+    3. **Check App Transport Security** (unlikely with HTTPS Unsplash URLs):
+       If using custom HTTP image sources, add to `Info.plist`:
+       ```xml
+       <key>NSAppTransportSecurity</key>
+       <dict>
+           <key>NSAllowsArbitraryLoads</key>
+           <true/>
+       </dict>
+       ```
+  </Accordion>
+
+  <Accordion title="User switcher shows no users">
+    **Symptom**: User switcher modal is empty or shows loading state indefinitely
+    
+    **Cause**: Backend not returning user data or API connection failed
+    
+    **Solutions**:
+    
+    1. **Check backend logs** for user creation:
+       ```
+       INFO - Created 15 users with interests
+       ```
+    
+    2. **Test users endpoint directly**:
+       ```bash
+       curl http://localhost:8000/users/user_1
+       ```
+       Should return user profile JSON
+    
+    3. **Verify database seeding**:
+       ```bash
+       sqlite3 luna.db "SELECT COUNT(*) FROM users;"
+       ```
+       Should return `15`
+  </Accordion>
+
+  <Accordion title="Recommendations not updating after toggling interest">
+    **Symptom**: "For You" tab scores don't change when marking venue as interested
+    
+    **Expected Behavior**: This is actually correct! Scores are calculated based on **other users'** interests, not your own.
+    
+    **Why**: This prevents venues from jumping around when you interact with them. The position stays stable.
+    
+    **What does change**:
+    - Checkmark icon appears on interested venues
+    - Venue appears in Profile → Interested Venues
+    - Activity appears in friends' social feeds
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Build Errors
+
+<AccordionGroup>
+  <Accordion title="Swift compiler errors about missing types">
+    **Symptom**: 
+    ```
+    Cannot find type 'VenueListItem' in scope
+    Cannot find 'APIService' in scope
+    ```
+    
+    **Solution**:
+    
+    1. **Ensure all files are in project**:
+       - Xcode → Project Navigator → Check for red file names
+       - Right-click missing files → Add Files to "name"
+    
+    2. **Check file target membership**:
+       - Select file → File Inspector → Target Membership
+       - Ensure "name" target is checked
+    
+    3. **Clean and rebuild**:
+       ```
+       Cmd+Shift+K (Clean)
+       Cmd+B (Build)
+       ```
+  </Accordion>
+
+  <Accordion title="Signing & Capabilities errors">
+    **Symptom**: 
+    ```
+    Signing for "name" requires a development team
+    Failed to register bundle identifier
+    ```
+    
+    **Solution**:
+    
+    1. **Add development team**:
+       - Xcode → Project Settings → Signing & Capabilities
+       - Team → Select your Apple ID
+    
+    2. **Change bundle identifier**:
+       - Bundle Identifier → Change to unique identifier
+       - Example: `com.yourname.luna`
+    
+    3. **Enable Automatically manage signing**
+  </Accordion>
+
+  <Accordion title="Module compiled with Swift X.X cannot be imported by Swift Y.Y">
+    **Symptom**: Version mismatch errors between dependencies
+    
+    **Solution**:
+    
+    1. **Update Xcode** to latest version
+    
+    2. **Clean derived data**:
+       ```bash
+       rm -rf ~/Library/Developer/Xcode/DerivedData
+       ```
+    
+    3. **Rebuild project**:
+       Cmd+Shift+K, then Cmd+B
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Performance Issues
+
+<AccordionGroup>
+  <Accordion title="Slow API responses or timeouts">
+    **Symptom**: App shows loading states for >5 seconds, timeout errors
+    
+    **Diagnosis**:
+    
+    1. **Test API directly**:
+       ```bash
+       time curl http://localhost:8000/venues
+       ```
+       Should complete in < 1 second
+    
+    2. **Check database file size**:
+       ```bash
+       ls -lh luna.db
+       ```
+       If > 10MB, may need optimization
+    
+    **Solutions**:
+    
+    1. **Restart backend** (clears in-memory caches)
+    
+    2. **Optimize database**:
+       ```bash
+       sqlite3 luna.db "VACUUM;"
+       sqlite3 luna.db "ANALYZE;"
+       ```
+    
+    3. **Increase timeout** in `APIService.swift`:
+       ```swift
+       configuration.timeoutIntervalForRequest = 60.0  // Increase from 30
+       ```
+  </Accordion>
+
+  <Accordion title="App uses too much memory or crashes on device">
+    **Symptom**: Memory warnings, app killed by iOS
+    
+    **Solution**:
+    
+    1. **Check image cache size** (`ImageCacheService.swift`):
+       ```swift
+       private let cache = NSCache<NSString, UIImage>()
+       
+       init() {
+           cache.countLimit = 100  // Reduce if needed
+           cache.totalCostLimit = 50 * 1024 * 1024  // 50 MB limit
+       }
+       ```
+    
+    2. **Profile with Instruments**:
+       - Xcode → Product → Profile
+       - Choose "Leaks" or "Allocations" template
+       - Run app and check for memory leaks
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Data Issues
+
+<AccordionGroup>
+  <Accordion title="Reset all data to initial state">
+    **When to use**: Testing, corrupted data, want fresh start
+    
+    **Backend Reset**:
+    ```bash
+    # Stop server (Ctrl+C)
+    rm luna.db
+    rm luna.db-journal  # If exists
+    uvicorn main:app --reload --port 8000
+    # Database will auto-seed on startup
+    ```
+    
+    **iOS App Reset**:
+    - Simulator: Device → Erase All Content and Settings
+    - Physical Device: Settings → General → Reset → Erase All Content
+  </Accordion>
+
+  <Accordion title="Action items not appearing in Profile tab">
+    **Symptom**: No action items show even though 5+ users interested
+    
+    **Diagnosis**:
+    
+    1. **Check backend logs** for action item creation:
+       ```
+       INFO - Action item created: action_venue_1_... for venue=venue_1, count=5
+       ```
+    
+    2. **Query database directly**:
+       ```bash
+       sqlite3 luna.db "SELECT * FROM action_items WHERE status='active';"
+       ```
+    
+    **Solutions**:
+    
+    1. **Manually trigger threshold** by having 5 different users express interest
+    
+    2. **Check agent.py logic**:
+       ```python
+       if len(interested_user_ids) < 5:
+           return {"action_item_created": False}
+       ```
+       Ensure threshold is 5, not higher
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Getting More Help
+
+If you've tried the solutions above and still experiencing issues:
+
+1. **Check server logs** for error messages:
+   ```bash
+   tail -f server.log  # If logging to file
+   ```
+
+2. **Enable verbose logging**:
+   In `main.py`:
+   ```python
+   logging.basicConfig(level=logging.DEBUG)  # More detailed logs
+   ```
+
+3. **Test API endpoints directly** with curl or Postman:
+   ```bash
+   # List all venues
+   curl http://localhost:8000/venues
+   
+   # Get specific user
+   curl http://localhost:8000/users/user_1
+   
+   # Get recommendations
+   curl "http://localhost:8000/recommendations?user_id=user_1"
+   ```
+
+4. **Check GitHub issues**: Visit the [Luna repository](https://github.com/Krut-in/SwiftAssessment) for known issues
+
+5. **Contact the developer**: Email krutin31@gmail.com with:
+   - Error messages from Xcode console
+   - Backend server logs
+   - Steps to reproduce the issue
+   - Your environment (macOS version, Xcode version, Python version)

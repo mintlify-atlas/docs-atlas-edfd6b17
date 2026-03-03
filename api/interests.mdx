@@ -1,0 +1,178 @@
+---
+title: 'Interests'
+description: 'Endpoints for managing user interest in venues'
+---
+
+## Express Interest in Venue
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:8000/interests" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_1",
+    "venue_id": "venue_1"
+  }'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/interests",
+    json={
+        "user_id": "user_1",
+        "venue_id": "venue_1"
+    }
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Request Body
+
+<ParamField body="user_id" type="string" required>
+  User ID expressing interest. Must be non-empty, max 100 characters, alphanumeric and underscore only.
+</ParamField>
+
+<ParamField body="venue_id" type="string" required>
+  Venue ID to express interest in. Must be non-empty, max 100 characters, alphanumeric and underscore only.
+</ParamField>
+
+### Behavior
+
+This endpoint **toggles** interest:
+
+- **If user is NOT interested**: Adds interest, creates activity for friends' social feeds, and may create an action item if 5+ users are interested
+- **If user IS already interested**: Removes interest and deletes associated activity
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable message describing the result
+</ResponseField>
+
+<ResponseField name="action_item" type="object" optional>
+  Only present when a new action item is created (when 5+ users express interest)
+  
+  <Expandable title="Action Item Response">
+    <ResponseField name="action_item_created" type="boolean">
+      Whether an action item was created
+    </ResponseField>
+    
+    <ResponseField name="action_item_id" type="string">
+      Unique identifier for the action item
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      AI-generated description of the action item
+    </ResponseField>
+    
+    <ResponseField name="action_code" type="string">
+      Action code (e.g., "GROUP_VISIT", "BOOKING")
+    </ResponseField>
+    
+    <ResponseField name="interested_user_ids" type="array">
+      Array of user IDs interested in this venue
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response - Interest Added
+
+```json
+{
+  "success": true,
+  "message": "Interest recorded successfully"
+}
+```
+
+### Example Response - Interest Removed
+
+```json
+{
+  "success": true,
+  "message": "Interest removed for Cozy Coffee Corner"
+}
+```
+
+### Example Response - Action Item Created
+
+```json
+{
+  "success": true,
+  "message": "Interest recorded successfully",
+  "action_item": {
+    "action_item_created": true,
+    "action_item_id": "action_item_123",
+    "description": "5 people want to visit Cozy Coffee Corner - plan a group meetup!",
+    "action_code": "GROUP_VISIT",
+    "interested_user_ids": [
+      "user_1",
+      "user_2",
+      "user_3",
+      "user_4",
+      "user_5"
+    ]
+  }
+}
+```
+
+### Error Responses
+
+<ResponseField name="400" type="Bad Request">
+  Invalid request parameters (validation errors)
+</ResponseField>
+
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "user_id"],
+      "msg": "ID cannot be empty",
+      "type": "value_error"
+    }
+  ]
+}
+```
+
+<ResponseField name="404" type="Not Found">
+  User or venue not found
+</ResponseField>
+
+```json
+{
+  "detail": "User with id 'invalid_user' not found"
+}
+```
+
+```json
+{
+  "detail": "Venue with id 'invalid_venue' not found"
+}
+```
+
+## Activity Creation
+
+When a user expresses interest in a venue, the system:
+
+1. **Creates an Interest Record**: Links the user to the venue
+2. **Creates an Activity**: Friends see this in their social feed
+3. **Evaluates Action Item Creation**: If 5+ users are interested, creates an action item
+
+Activities are committed separately from action items to ensure they always persist, maintaining consistency across Profile, Discover, Recommended, and Social tabs.
+
+## Action Item Threshold
+
+Action items are automatically created when:
+- **5 or more users** express interest in the same venue
+- No active action item already exists for that venue
+
+The action item:
+- Expires after **90 days** from creation
+- Can be completed, dismissed, or initiated for group coordination
+- Notifies all interested users about the opportunity to coordinate

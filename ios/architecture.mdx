@@ -1,0 +1,423 @@
+---
+title: 'iOS App Architecture'
+description: 'Learn about the MVVM architecture, app structure, and design patterns used in the Luna iOS app'
+---
+
+The Luna iOS app follows a clean MVVM (Model-View-ViewModel) architecture with zero external dependencies, relying entirely on native SwiftUI and Combine frameworks.
+
+## Architecture Overview
+
+The app is structured around four main architectural layers:
+
+<CardGroup cols={2}>
+  <Card title="Models" icon="database">
+    Codable data structures representing domain entities
+  </Card>
+  <Card title="Views" icon="mobile">
+    SwiftUI views for UI presentation and user interaction
+  </Card>
+  <Card title="ViewModels" icon="diagram-project">
+    Business logic and state management with @Published properties
+  </Card>
+  <Card title="Services" icon="server">
+    Network, caching, and system services
+  </Card>
+</CardGroup>
+
+## MVVM Pattern
+
+The app implements the Model-View-ViewModel pattern for separation of concerns:
+
+### Models
+
+Models are lightweight, Codable structs that represent domain data:
+
+```swift name/Models/Venue.swift
+/// Represents a venue with full details
+struct Venue: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let category: String
+    let description: String
+    let image: String
+    let address: String
+    let latitude: Double?
+    let longitude: Double?
+    let distance_km: Double?
+}
+
+/// Lightweight summary for list views
+struct VenueListItem: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let category: String
+    let image: String
+    let interested_count: Int
+    let distance_km: Double?
+}
+```
+
+<Note>
+**Design Decision:** Two separate models optimize for different use cases:
+- `VenueListItem`: Minimal data for feed performance
+- `Venue`: Full details loaded on demand
+</Note>
+
+### Views
+
+SwiftUI views are purely declarative and stateless:
+
+```swift name/Views/VenueCardView.swift
+struct VenueCardView: View {
+    let venue: VenueListItem
+    var onInterestToggled: (() -> Void)? = nil
+    
+    @ObservedObject private var appState = AppState.shared
+    @State private var localInterestedCount: Int
+    @State private var isAnimating = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Venue image with cached loading
+            CachedAsyncImage(url: venue.image) { image in
+                image
+                    .resizable()
+                    .aspectRatio(4/3, contentMode: .fill)
+            } placeholder: {
+                ProgressView()
+            }
+            
+            // Venue info section
+            VStack(alignment: .leading, spacing: Theme.Layout.smallSpacing) {
+                HStack {
+                    Text(venue.category)
+                        .font(Theme.Fonts.caption)
+                        .padding(.horizontal, 12)
+                        .background(categoryColor(for: venue.category))
+                        .clipShape(Capsule())
+                    
+                    Spacer()
+                    
+                    // Heart button for interest toggle
+                    Button { handleInterestTap() } label: {
+                        Image(systemName: isInterested ? "heart.fill" : "heart")
+                    }
+                }
+                
+                Text(venue.name)
+                    .font(Theme.Fonts.title3)
+            }
+            .padding(.horizontal, Theme.Layout.padding)
+        }
+        .background(Theme.Colors.cardBackground)
+        .cornerRadius(Theme.Layout.cornerRadius)
+        .elevationMedium()
+    }
+}
+```
+
+### ViewModels
+
+ViewModels manage state and business logic using Combine:
+
+```swift name/ViewModels/VenueFeedViewModel.swift
+@MainActor
+class VenueFeedViewModel: ObservableObject {
+    // Published properties for view binding
+    @Published var venues: [VenueListItem] = []
+    @Published var filters = VenueFilters()
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+    
+    private let apiService: APIServiceProtocol
+    private let appState: AppState
+    
+    init(apiService: APIServiceProtocol = APIService(), appState: AppState) {
+        self.apiService = apiService
+        self.appState = appState
+    }
+    
+    /// Loads venues from the API with current filters
+    func loadVenues() async {
+        guard !isLoading else { return }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let fetchedVenues = try await apiService.fetchVenues(
+                userId: appState.currentUserId,
+                filters: filters
+            )
+            self.venues = fetchedVenues
+            self.isLoading = false
+        } catch let error as APIError {
+            self.errorMessage = error.errorDescription
+            self.isLoading = false
+        }
+    }
+}
+```
+
+<Tip>
+**@MainActor:** All ViewModel methods are marked with `@MainActor` to ensure UI updates happen on the main thread, eliminating the need for manual `DispatchQueue.main.async` calls.
+</Tip>
+
+## App Entry Point
+
+The app uses SwiftUI's modern App lifecycle:
+
+```swift name/nameApp.swift
+import SwiftUI
+
+@main
+struct nameApp: App {
+    @StateObject private var themeManager = ThemeManager()
+    @ObservedObject private var appState = AppState.shared
+    private let notificationService = NotificationService.shared
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(themeManager)
+                .preferredColorScheme(themeManager.colorScheme)
+                .onOpenURL { url in
+                    // Handle deep links (luna://venues/{id})
+                    appState.handleDeepLink(url)
+                }
+                .task {
+                    // Check for expired action items on app launch
+                    await ActionItemExpirationManager.checkExpiredItems()
+                    
+                    // Request notification permission
+                    _ = await notificationService.requestPermission()
+                }
+        }
+    }
+}
+```
+
+### Key Features
+
+- **Theme Management**: `ThemeManager` handles dark mode with persistence
+- **Global State**: `AppState` singleton manages user data and interests
+- **Deep Linking**: Supports `luna://` URL scheme for navigation
+- **Background Tasks**: Checks expired action items and requests permissions on launch
+
+## Navigation Structure
+
+The app uses a custom tab-based navigation system:
+
+```swift name/ContentView.swift
+struct ContentView: View {
+    @ObservedObject private var appState = AppState.shared
+    
+    var body: some View {
+        ZStack {
+            // Current view based on selectedTab
+            Group {
+                switch appState.selectedTab {
+                case 0: VenueFeedView()
+                case 1: RecommendedFeedView()
+                case 2: ActionTabView()
+                case 3: ProfileView()
+                default: VenueFeedView()
+                }
+            }
+            
+            // Custom floating tab bar
+            if !appState.isTabBarHidden {
+                VStack {
+                    Spacer()
+                    CustomTabBarView(
+                        selectedTab: $appState.selectedTab,
+                        socialBadgeCount: appState.newSocialActivityCount,
+                        profileBadgeCount: appState.actionItemCount
+                    )
+                }
+                .zIndex(100)
+            }
+            
+            // Global Action Item Toast
+            ActionItemToast(
+                actionItem: $appState.pendingActionItem,
+                isShowing: $appState.showActionItemToast
+            )
+            .zIndex(999)
+        }
+    }
+}
+```
+
+## Dependency Injection
+
+The app uses protocol-based dependency injection for testability:
+
+```swift
+protocol APIServiceProtocol {
+    func fetchVenues(userId: String?, filters: VenueFilters?) async throws -> [VenueListItem]
+    func fetchVenueDetail(venueId: String) async throws -> VenueDetailResponse
+    func expressInterest(userId: String, venueId: String) async throws -> InterestResponse
+}
+
+class VenueFeedViewModel: ObservableObject {
+    private let apiService: APIServiceProtocol
+    
+    // Inject real or mock service
+    init(apiService: APIServiceProtocol = APIService()) {
+        self.apiService = apiService
+    }
+}
+```
+
+<Accordion title="Why Protocol-Based Design?">
+- **Testability**: Easily swap real services with mocks in unit tests
+- **Flexibility**: Change implementations without modifying ViewModels
+- **Decoupling**: ViewModels depend on abstractions, not concrete implementations
+</Accordion>
+
+## Zero External Dependencies
+
+The Luna iOS app is built entirely with native Apple frameworks:
+
+<CardGroup cols={3}>
+  <Card title="SwiftUI" icon="swift">
+    Declarative UI framework
+  </Card>
+  <Card title="Combine" icon="arrow-progress">
+    Reactive programming
+  </Card>
+  <Card title="Foundation" icon="cube">
+    Core data types and utilities
+  </Card>
+  <Card title="URLSession" icon="network-wired">
+    Native HTTP networking
+  </Card>
+  <Card title="NSCache" icon="memory">
+    In-memory caching
+  </Card>
+  <Card title="CryptoKit" icon="lock">
+    SHA256 hashing for image cache
+  </Card>
+</CardGroup>
+
+### Benefits
+
+- **No Build Complexity**: No CocoaPods, SPM, or Carthage dependencies
+- **Future-Proof**: Won't break when third-party libraries become unmaintained
+- **Performance**: Native frameworks are optimized for iOS
+- **App Size**: Smaller binary without external dependencies
+- **Security**: Reduced attack surface from third-party code
+
+## Thread Safety
+
+The app ensures thread-safe UI updates using modern Swift concurrency:
+
+```swift
+@MainActor
+class AppState: ObservableObject {
+    @Published var currentUserId: String = ""
+    @Published var interestedVenueIds: Set<String> = []
+    
+    func toggleInterest(venueId: String) async throws -> InterestResponse {
+        // Optimistic update on main thread
+        if interestedVenueIds.contains(venueId) {
+            interestedVenueIds.remove(venueId)
+        } else {
+            interestedVenueIds.insert(venueId)
+        }
+        
+        // Network call happens off main thread
+        let response = try await apiService.expressInterest(
+            userId: currentUserId,
+            venueId: venueId
+        )
+        
+        // Automatically back on main thread due to @MainActor
+        return response
+    }
+}
+```
+
+<Warning>
+**Legacy Code:** Avoid manual thread management with `DispatchQueue.main.async`. Use `@MainActor` and `async/await` instead for cleaner, safer code.
+</Warning>
+
+## File Structure
+
+```
+name/
+├── nameApp.swift           # App entry point
+├── ContentView.swift       # Root navigation view
+├── Design/
+│   ├── Theme.swift         # Design system constants
+│   └── ThemeManager.swift  # Dark mode management
+├── Models/
+│   ├── Venue.swift         # Domain models
+│   ├── User.swift
+│   ├── Activity.swift
+│   └── APIModels.swift     # API request/response models
+├── ViewModels/
+│   ├── AppState.swift      # Global state singleton
+│   ├── VenueFeedViewModel.swift
+│   ├── ProfileViewModel.swift
+│   └── ChatManager.swift
+├── Views/
+│   ├── VenueFeedView.swift
+│   ├── VenueDetailView.swift
+│   ├── ProfileView.swift
+│   └── Components/         # Reusable UI components
+│       ├── VenueCardView.swift
+│       ├── CachedAsyncImage.swift
+│       ├── CustomTabBarView.swift
+│       └── ...
+├── Services/
+│   ├── APIService.swift    # HTTP networking
+│   ├── ImageCacheService.swift
+│   ├── AuthenticationService.swift
+│   └── NotificationService.swift
+└── Extensions/
+    └── Date+RelativeTime.swift
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="State Management">
+    - Use `@State` for local view state
+    - Use `@StateObject` for view-owned ViewModels
+    - Use `@ObservedObject` for shared ViewModels (like AppState)
+    - Use `@EnvironmentObject` for app-wide dependencies (like ThemeManager)
+  </Accordion>
+  
+  <Accordion title="Async/Await">
+    - Prefer `async/await` over completion handlers
+    - Mark ViewModel methods with `@MainActor` for UI safety
+    - Use `Task {}` for calling async code from sync context
+    - Handle errors with proper `do-catch` blocks
+  </Accordion>
+  
+  <Accordion title="Performance">
+    - Use `VenueListItem` for lists, `Venue` for details
+    - Implement caching layers (memory + disk)
+    - Use lazy loading for images
+    - Avoid unnecessary view re-renders with proper state management
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Design System" icon="palette" href="/ios/design-system">
+    Explore Theme.swift colors, typography, and spacing
+  </Card>
+  <Card title="State Management" icon="database" href="/ios/state-management">
+    Learn about AppState and Combine usage
+  </Card>
+  <Card title="Networking" icon="wifi" href="/ios/networking">
+    Understand APIService implementation
+  </Card>
+  <Card title="Views & Components" icon="cubes" href="/ios/views-and-components">
+    Discover reusable UI components
+  </Card>
+</CardGroup>

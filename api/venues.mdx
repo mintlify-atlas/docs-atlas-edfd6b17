@@ -1,0 +1,299 @@
+---
+title: 'Venues'
+description: 'Endpoints for retrieving venue information'
+---
+
+## List All Venues
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/venues?user_id=user_1&categories=Cafe&max_distance=5&sort_by=distance"
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "http://localhost:8000/venues",
+    params={
+        "user_id": "user_1",
+        "categories": "Cafe,Restaurant",
+        "max_distance": 5,
+        "sort_by": "distance"
+    }
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Query Parameters
+
+<ParamField query="user_id" type="string" optional>
+  User ID to calculate distances and friend interests. When provided, enables distance-based filtering and sorting.
+</ParamField>
+
+<ParamField query="categories" type="string" optional>
+  Comma-separated list of categories to filter by (e.g., "Cafe,Restaurant"). Use "all" to show all categories.
+</ParamField>
+
+<ParamField query="max_distance" type="float" optional>
+  Maximum distance in kilometers from user location. Requires `user_id` to be provided.
+</ParamField>
+
+<ParamField query="min_friend_interest" type="integer" optional>
+  Minimum number of friends interested in the venue. Requires `user_id` to be provided.
+</ParamField>
+
+<ParamField query="only_interested" type="boolean" optional>
+  Show only venues the user is interested in. Requires `user_id` to be provided.
+</ParamField>
+
+<ParamField query="exclude_interested" type="boolean" optional>
+  Show only venues the user is NOT interested in. Requires `user_id` to be provided.
+</ParamField>
+
+<ParamField query="sort_by" type="string" optional default="popularity">
+  Sort criterion:
+  - `popularity` - Sort by number of interested users (default)
+  - `distance` - Sort by distance from user (requires `user_id`)
+  - `friends` - Sort by number of friends interested (requires `user_id`)
+  - `name` - Sort alphabetically by name
+</ParamField>
+
+### Response
+
+<ResponseField name="venues" type="array">
+  Array of venue objects matching the filters
+  
+  <Expandable title="Venue Object">
+    <ResponseField name="id" type="string">
+      Unique venue identifier
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Venue name
+    </ResponseField>
+    
+    <ResponseField name="category" type="string">
+      Venue category (e.g., "Cafe", "Restaurant", "Bar")
+    </ResponseField>
+    
+    <ResponseField name="image" type="string">
+      Primary image URL
+    </ResponseField>
+    
+    <ResponseField name="interested_count" type="integer">
+      Total number of users interested in this venue
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      ISO timestamp of when venue was created
+    </ResponseField>
+    
+    <ResponseField name="distance_km" type="float" optional>
+      Distance in kilometers from user location (only when `user_id` provided)
+    </ResponseField>
+    
+    <ResponseField name="friends_interested" type="integer" optional>
+      Number of user's friends interested (only when `user_id` provided)
+    </ResponseField>
+    
+    <ResponseField name="user_interested" type="boolean" optional>
+      Whether the user is interested in this venue (only when `user_id` provided)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="applied_filters" type="object">
+  Summary of filters applied to the query
+</ResponseField>
+
+<ResponseField name="result_count" type="integer">
+  Number of venues returned after filtering
+</ResponseField>
+
+<ResponseField name="total_venues" type="integer">
+  Total number of venues in the database
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "venues": [
+    {
+      "id": "venue_1",
+      "name": "Cozy Coffee Corner",
+      "category": "Cafe",
+      "image": "https://images.unsplash.com/photo-1...",
+      "interested_count": 5,
+      "created_at": "2024-01-15T10:30:00",
+      "distance_km": 1.2,
+      "friends_interested": 2,
+      "user_interested": true
+    },
+    {
+      "id": "venue_2",
+      "name": "Urban Espresso",
+      "category": "Cafe",
+      "image": "https://images.unsplash.com/photo-2...",
+      "interested_count": 8,
+      "created_at": "2024-01-10T14:20:00",
+      "distance_km": 2.5,
+      "friends_interested": 1,
+      "user_interested": false
+    }
+  ],
+  "applied_filters": {
+    "categories": "Cafe",
+    "max_distance": 5,
+    "sort_by": "distance"
+  },
+  "result_count": 2,
+  "total_venues": 25
+}
+```
+
+---
+
+## Get Venue Details
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/venues/venue_1?user_id=user_1"
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "http://localhost:8000/venues/venue_1",
+    params={"user_id": "user_1"}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="venue_id" type="string" required>
+  The unique identifier of the venue to retrieve
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="user_id" type="string" optional>
+  User ID to calculate distance from user location
+</ParamField>
+
+### Response
+
+<ResponseField name="venue" type="object">
+  Complete venue details
+  
+  <Expandable title="Venue Details">
+    <ResponseField name="id" type="string">
+      Unique venue identifier
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Venue name
+    </ResponseField>
+    
+    <ResponseField name="category" type="string">
+      Venue category
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Full venue description
+    </ResponseField>
+    
+    <ResponseField name="image" type="string">
+      Primary image URL
+    </ResponseField>
+    
+    <ResponseField name="images" type="array">
+      Array of image URLs for multi-image galleries
+    </ResponseField>
+    
+    <ResponseField name="address" type="string">
+      Full venue address
+    </ResponseField>
+    
+    <ResponseField name="latitude" type="float">
+      Venue latitude coordinate (for "Get Directions" feature)
+    </ResponseField>
+    
+    <ResponseField name="longitude" type="float">
+      Venue longitude coordinate (for "Get Directions" feature)
+    </ResponseField>
+    
+    <ResponseField name="distance_km" type="float" optional>
+      Distance from user location in kilometers (only when `user_id` provided)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="interested_users" type="array">
+  List of users interested in this venue
+  
+  <Expandable title="User Object">
+    <ResponseField name="id" type="string">
+      User identifier
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      User name
+    </ResponseField>
+    
+    <ResponseField name="avatar" type="string">
+      User avatar URL
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "venue": {
+    "id": "venue_1",
+    "name": "Cozy Coffee Corner",
+    "category": "Cafe",
+    "description": "A warm and inviting coffee shop perfect for remote work and casual meetups.",
+    "image": "https://images.unsplash.com/photo-1...",
+    "images": [
+      "https://images.unsplash.com/photo-1...",
+      "https://images.unsplash.com/photo-2..."
+    ],
+    "address": "123 Main St, San Francisco, CA 94102",
+    "latitude": 37.7749,
+    "longitude": -122.4194,
+    "distance_km": 1.2
+  },
+  "interested_users": [
+    {
+      "id": "user_1",
+      "name": "Alice Johnson",
+      "avatar": "https://i.pravatar.cc/150?img=1"
+    },
+    {
+      "id": "user_2",
+      "name": "Bob Smith",
+      "avatar": "https://i.pravatar.cc/150?img=2"
+    }
+  ]
+}
+```
+
+### Error Responses
+
+<ResponseField name="404" type="Not Found">
+  Venue with the specified ID does not exist
+</ResponseField>
+
+```json
+{
+  "detail": "Venue with id 'invalid_venue' not found"
+}
+```

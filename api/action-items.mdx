@@ -1,0 +1,487 @@
+---
+title: 'Action Items'
+description: 'Endpoints for managing action items and group coordination'
+---
+
+## Complete Action Item
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:8000/action-items/action_item_123/complete" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user_1"}'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/action-items/action_item_123/complete",
+    json={"user_id": "user_1"}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="item_id" type="string" required>
+  The unique identifier of the action item to complete
+</ParamField>
+
+### Request Body
+
+<ParamField body="user_id" type="string" required>
+  User ID completing the action item. Must be in the interested_user_ids list.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable message
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Action item marked as completed"
+}
+```
+
+### Error Responses
+
+<ResponseField name="404" type="Not Found">
+  Action item not found
+</ResponseField>
+
+<ResponseField name="403" type="Forbidden">
+  User not authorized (not in interested_user_ids)
+</ResponseField>
+
+---
+
+## Dismiss Action Item (DELETE)
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE "http://localhost:8000/action-items/action_item_123?user_id=user_1"
+```
+
+```python Python
+import requests
+
+response = requests.delete(
+    "http://localhost:8000/action-items/action_item_123",
+    params={"user_id": "user_1"}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="item_id" type="string" required>
+  The unique identifier of the action item to dismiss
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="user_id" type="string" required>
+  User ID dismissing the action item
+</ParamField>
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Action item dismissed"
+}
+```
+
+---
+
+## Dismiss Action Item (PUT)
+
+<CodeGroup>
+```bash cURL
+curl -X PUT "http://localhost:8000/action-items/action_item_123/dismiss" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user_1"}'
+```
+
+```python Python
+import requests
+
+response = requests.put(
+    "http://localhost:8000/action-items/action_item_123/dismiss",
+    json={"user_id": "user_1"}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="item_id" type="string" required>
+  The unique identifier of the action item to dismiss
+</ParamField>
+
+### Request Body
+
+<ParamField body="user_id" type="string" required>
+  User ID dismissing the action item
+</ParamField>
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Action item dismissed"
+}
+```
+
+---
+
+## Initiate "Go Ahead" Flow
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:8000/action-items/action_item_123/initiate" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user_1"}'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/action-items/action_item_123/initiate",
+    json={"user_id": "user_1"}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="item_id" type="string" required>
+  The unique identifier of the action item
+</ParamField>
+
+### Request Body
+
+<ParamField body="user_id" type="string" required>
+  User ID initiating the "Go Ahead" flow (becomes the initiator)
+</ParamField>
+
+### Response
+
+<ResponseField name="action_item_id" type="string">
+  The action item ID
+</ResponseField>
+
+<ResponseField name="initiator" type="object">
+  Initiator details (always marked as confirmed)
+</ResponseField>
+
+<ResponseField name="confirmations" type="array">
+  Array of confirmation records for other interested users
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "action_item_id": "action_item_123",
+  "initiator": {
+    "user_id": "user_1",
+    "name": "Alice Johnson",
+    "avatar": "https://i.pravatar.cc/150?img=1",
+    "status": "confirmed"
+  },
+  "confirmations": [
+    {
+      "user_id": "user_2",
+      "name": "Bob Smith",
+      "avatar": "https://i.pravatar.cc/150?img=2",
+      "status": "pending",
+      "responded_at": null
+    },
+    {
+      "user_id": "user_3",
+      "name": "Carol White",
+      "avatar": "https://i.pravatar.cc/150?img=3",
+      "status": "pending",
+      "responded_at": null
+    }
+  ]
+}
+```
+
+---
+
+## Get Action Item Status
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/action-items/action_item_123/status"
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8000/action-items/action_item_123/status")
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="item_id" type="string" required>
+  The unique identifier of the action item
+</ParamField>
+
+### Response
+
+<ResponseField name="action_item_id" type="string">
+  Action item ID
+</ResponseField>
+
+<ResponseField name="venue" type="object">
+  Associated venue details
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current status ("active", "completed", "dismissed", "expired")
+</ResponseField>
+
+<ResponseField name="initiator" type="object" optional>
+  Initiator details (if Go Ahead flow was initiated)
+</ResponseField>
+
+<ResponseField name="confirmations" type="array">
+  Array of user confirmation statuses
+</ResponseField>
+
+<ResponseField name="chat_created" type="boolean">
+  Whether a group chat was created
+</ResponseField>
+
+<ResponseField name="chat_id" type="string" optional>
+  Chat ID if chat was created
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "action_item_id": "action_item_123",
+  "venue": {
+    "id": "venue_1",
+    "name": "Cozy Coffee Corner",
+    "category": "Cafe",
+    "image": "https://images.unsplash.com/photo-1..."
+  },
+  "status": "active",
+  "initiator": {
+    "user_id": "user_1",
+    "name": "Alice Johnson",
+    "avatar": "https://i.pravatar.cc/150?img=1",
+    "status": "confirmed",
+    "responded_at": null,
+    "is_initiator": true
+  },
+  "confirmations": [
+    {
+      "user_id": "user_2",
+      "name": "Bob Smith",
+      "avatar": "https://i.pravatar.cc/150?img=2",
+      "status": "confirmed",
+      "responded_at": "2024-01-08T15:30:00"
+    },
+    {
+      "user_id": "user_3",
+      "name": "Carol White",
+      "avatar": "https://i.pravatar.cc/150?img=3",
+      "status": "pending",
+      "responded_at": null
+    }
+  ],
+  "chat_created": true,
+  "chat_id": "chat_abc123"
+}
+```
+
+---
+
+## Confirm Action Item
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:8000/action-items/action_item_123/confirm" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user_2"}'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/action-items/action_item_123/confirm",
+    json={"user_id": "user_2"}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="item_id" type="string" required>
+  The unique identifier of the action item
+</ParamField>
+
+### Request Body
+
+<ParamField body="user_id" type="string" required>
+  User ID confirming interest
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the confirmation succeeded
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable message
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  User's new status ("confirmed")
+</ResponseField>
+
+<ResponseField name="confirmed_count" type="integer">
+  Total number of confirmed users (including initiator)
+</ResponseField>
+
+<ResponseField name="chat_created" type="boolean">
+  Whether a group chat was auto-created (happens when 2+ users are confirmed)
+</ResponseField>
+
+<ResponseField name="chat_id" type="string" optional>
+  Chat ID if chat was created
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "message": "Confirmation recorded",
+  "status": "confirmed",
+  "confirmed_count": 2,
+  "chat_created": true,
+  "chat_id": "chat_abc123"
+}
+```
+
+### Automatic Chat Creation
+
+When 2 or more users are confirmed (including the initiator), a group chat is automatically created with all confirmed participants.
+
+---
+
+## Decline Action Item
+
+<CodeGroup>
+```bash cURL
+curl -X POST "http://localhost:8000/action-items/action_item_123/decline" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user_3"}'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/action-items/action_item_123/decline",
+    json={"user_id": "user_3"}
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="item_id" type="string" required>
+  The unique identifier of the action item
+</ParamField>
+
+### Request Body
+
+<ParamField body="user_id" type="string" required>
+  User ID declining interest
+</ParamField>
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Interest declined",
+  "status": "declined"
+}
+```
+
+---
+
+## Expire Action Items
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/action-items/expire"
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8000/action-items/expire")
+print(response.json())
+```
+</CodeGroup>
+
+### Description
+
+Checks and expires action items older than 90 days. Can be called on app launch or as a scheduled task.
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="expired_count" type="integer">
+  Number of action items that were expired
+</ResponseField>
+
+<ResponseField name="checked_at" type="string">
+  ISO timestamp of when the check occurred
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "success": true,
+  "expired_count": 3,
+  "checked_at": "2024-01-08T16:00:00"
+}
+```

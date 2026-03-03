@@ -1,0 +1,644 @@
+---
+title: Installation
+description: Complete setup instructions for Luna backend and iOS app
+---
+
+## Prerequisites
+
+Before installing Luna, ensure your system meets these requirements:
+
+| Component | Requirement | Version | Check command |
+|-----------|-------------|---------|---------------|
+| **Backend** | Python | 3.10+ | `python3 --version` |
+| **Backend** | pip | Latest | `pip3 --version` |
+| **iOS** | macOS | Ventura+ | **About This Mac** |
+| **iOS** | Xcode | 15.0+ | `xcodebuild -version` |
+| **iOS** | iOS Target | 17.0+ | N/A |
+
+<Warning>
+  **Python version**: Luna requires Python 3.10 or higher due to SQLAlchemy 2.0 async features and modern type hints.
+</Warning>
+
+## Backend installation
+
+The backend is a FastAPI application with SQLite persistence. Follow these steps for a complete setup:
+
+<Steps>
+  <Step title="Clone the repository">
+    If you haven't already cloned the Luna repository:
+
+    ```bash
+    git clone https://github.com/Krut-in/SwiftAssessment.git
+    cd SwiftAssessment
+    ```
+  </Step>
+
+  <Step title="Navigate to backend directory">
+    ```bash
+    cd Luna-Backend
+    ```
+
+    The backend directory structure:
+    ```
+    Luna-Backend/
+    ├── main.py              # FastAPI application entry point
+    ├── agent.py             # Booking agent logic
+    ├── database.py          # SQLAlchemy configuration
+    ├── seed_data.py         # Database seeding script
+    ├── requirements.txt     # Python dependencies
+    ├── setup.sh             # Automated setup script
+    └── models/
+        ├── db_models.py     # SQLAlchemy ORM models
+        └── api_models.py    # Pydantic request/response models
+    ```
+  </Step>
+
+  <Step title="Run automated setup">
+    The setup script handles virtual environment creation and dependency installation:
+
+    ```bash
+    chmod +x setup.sh && ./setup.sh
+    ```
+
+    What the script does:
+    1. Checks Python version (requires 3.10+)
+    2. Creates virtual environment in `venv/`
+    3. Upgrades pip to latest version
+    4. Installs all requirements from `requirements.txt`
+
+    Expected output:
+    ```bash
+    🚀 Luna Backend Setup
+    ====================
+    
+    ✓ Found Python 3.11.5
+    📦 Creating virtual environment...
+    ✓ Virtual environment created
+    🔧 Activating virtual environment...
+    ⬆️  Upgrading pip...
+    📚 Installing dependencies...
+    
+    ✅ Setup complete!
+    ```
+  </Step>
+
+  <Step title="Activate virtual environment">
+    ```bash
+    source venv/bin/activate
+    ```
+
+    Your terminal prompt should now show `(venv)` prefix:
+    ```bash
+    (venv) user@machine Luna-Backend %
+    ```
+
+    <Note>
+      You'll need to activate the virtual environment every time you open a new terminal session.
+    </Note>
+  </Step>
+
+  <Step title="Verify dependencies">
+    Check that all packages installed correctly:
+
+    ```bash
+    pip list | grep -E "fastapi|uvicorn|sqlalchemy|pydantic"
+    ```
+
+    Expected output:
+    ```
+    fastapi              0.115.0
+    pydantic             2.9.0
+    sqlalchemy           2.0.35
+    uvicorn              0.32.0
+    ```
+  </Step>
+
+  <Step title="Start the development server">
+    ```bash
+    uvicorn main:app --reload --port 8000
+    ```
+
+    Server startup logs:
+    ```
+    INFO:     Will watch for changes in these directories: ['/path/to/Luna-Backend']
+    INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+    INFO:     Started reloader process [12345] using WatchFiles
+    INFO:     Started server process [12346]
+    INFO:     Waiting for application startup.
+    INFO:     Starting Luna Backend API...
+    INFO:     Seeding database with initial data...
+    INFO:     Created 4 users
+    INFO:     Created 20 venues
+    INFO:     Created 28 bidirectional friendships
+    INFO:     Luna Backend API ready
+    INFO:     Application startup complete.
+    ```
+
+    <Tip>
+      The `--reload` flag enables auto-reload on code changes. Remove it in production deployments.
+    </Tip>
+  </Step>
+</Steps>
+
+### Backend configuration options
+
+#### Custom port
+
+```bash
+uvicorn main:app --reload --port 8080
+```
+
+#### Custom host (for network access)
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+<Warning>
+  Binding to `0.0.0.0` exposes the server to your local network. Only use this for development or testing with physical iOS devices.
+</Warning>
+
+#### Production deployment
+
+For production, use Gunicorn with multiple workers:
+
+```bash
+gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
+
+### Database management
+
+#### Automatic seeding
+
+On first startup, Luna automatically creates `luna.db` with:
+
+- **4 demo users**: Alex Chen, Jordan Kim, Morgan Taylor, Sam Rivera
+- **20+ venues**: Across 6 categories (Coffee, Restaurant, Bar, Cultural, Outdoor, Entertainment)
+- **Bidirectional friendships**: All users connected to each other
+- **Sample interests**: 30+ user-venue interest relationships
+- **Activity log**: Historical social feed entries
+
+<CodeGroup>
+
+```python Database models
+# models/db_models.py - Core database tables
+
+class UserDB(Base):
+    """User account with profile and preferences."""
+    __tablename__ = "users"
+    
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    avatar = Column(String)
+    bio = Column(String)
+    latitude = Column(Float)
+    longitude = Column(Float)
+
+class VenueDB(Base):
+    """Venue location with metadata."""
+    __tablename__ = "venues"
+    
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    category = Column(String, nullable=False)
+    description = Column(String)
+    image = Column(String)
+    address = Column(String)
+    latitude = Column(Float)
+    longitude = Column(Float)
+```
+
+```python Seed data
+# seed_data.py - Example user creation
+
+users_data = [
+    {
+        "id": "user_1",
+        "name": "Alex Chen",
+        "avatar": "https://i.pravatar.cc/150?img=1",
+        "bio": "Third-wave coffee connoisseur...",
+        "latitude": 40.7589,  # Times Square
+        "longitude": -73.9851,
+        "interests": ["coffee", "food", "culture"]
+    },
+    # ... more users
+]
+```
+
+</CodeGroup>
+
+#### Reset database
+
+To reset and re-seed the database:
+
+```bash
+# Stop server (Ctrl+C)
+rm luna.db
+uvicorn main:app --reload --port 8000
+```
+
+#### Backup database
+
+```bash
+cp luna.db luna.db.backup
+```
+
+### API documentation
+
+Once the server is running, access interactive API documentation:
+
+**Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)  
+Interactive API explorer with request/response examples
+
+**ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)  
+Clean, searchable API reference
+
+## iOS installation
+
+The iOS app is built with Swift 5.9 and SwiftUI, targeting iOS 17.0+.
+
+<Steps>
+  <Step title="Open Xcode project">
+    From the repository root:
+
+    ```bash
+    open name.xcodeproj
+    ```
+
+    Xcode will launch and load the project workspace.
+  </Step>
+
+  <Step title="Configure API base URL">
+    Navigate to `name/Services/APIService.swift` and update the base URL:
+
+    <CodeGroup>
+
+    ```swift iOS Simulator
+    // APIService.swift
+    
+    // MARK: - Configuration
+    
+    private let baseURL = "http://localhost:8000"
+    ```
+
+    ```swift Physical Device
+    // APIService.swift
+    
+    // MARK: - Configuration
+    
+    // Replace with your Mac's local IP address
+    private let baseURL = "http://192.168.1.45:8000"
+    ```
+
+    </CodeGroup>
+
+    <Note>
+      **Finding your local IP**:
+      1. Open **System Settings**
+      2. Click **Wi-Fi** (or **Network** on older macOS)
+      3. Click **Details** next to your connected network
+      4. Copy the **IP Address** (e.g., `192.168.1.45`)
+    </Note>
+  </Step>
+
+  <Step title="Select target device">
+    In Xcode's top toolbar:
+
+    1. Click the device dropdown (next to the scheme selector)
+    2. Choose **iPhone 15 Pro** simulator or your connected iOS device
+
+    <Tip>
+      For best performance, use a physical device or the latest iPhone Pro simulator.
+    </Tip>
+  </Step>
+
+  <Step title="Configure signing (if needed)">
+    If deploying to a physical device:
+
+    1. Select the project in the navigator (top item)
+    2. Select the **name** target
+    3. Go to **Signing & Capabilities** tab
+    4. Check **Automatically manage signing**
+    5. Select your **Team** (Apple ID)
+
+    Xcode will automatically create a provisioning profile.
+  </Step>
+
+  <Step title="Build and run">
+    Press **Cmd+R** or click the **Play** button in the toolbar.
+
+    First build may take 30-60 seconds as Xcode:
+    - Compiles 60+ Swift files
+    - Processes asset catalog
+    - Links frameworks
+    - Signs the app
+
+    The app will launch on your selected device/simulator.
+  </Step>
+</Steps>
+
+### iOS project structure
+
+```
+name/
+├── nameApp.swift                # App entry point
+├── ContentView.swift             # Root tab navigation
+├── Design/
+│   ├── Theme.swift              # Design system (colors, typography, spacing)
+│   └── ThemeManager.swift       # Dark mode management
+├── Models/
+│   ├── Venue.swift              # Venue domain models
+│   ├── User.swift               # User domain models
+│   ├── Activity.swift           # Social feed models
+│   └── APIModels.swift          # Request/response DTOs
+├── Services/
+│   ├── APIService.swift         # Network layer (URLSession)
+│   ├── ImageCacheService.swift  # NSCache-based image caching
+│   ├── PersistenceController.swift # CoreData wrapper
+│   ├── NotificationService.swift   # Push notification handling
+│   ├── AuthenticationService.swift # User authentication
+│   └── AnalyticsService.swift      # Event tracking
+├── ViewModels/
+│   ├── AppState.swift           # Global singleton state
+│   ├── VenueFeedViewModel.swift
+│   ├── RecommendedFeedViewModel.swift
+│   ├── SocialFeedViewModel.swift
+│   ├── ProfileViewModel.swift
+│   └── VenueDetailViewModel.swift
+└── Views/
+    ├── VenueFeedView.swift      # Discover tab
+    ├── RecommendedFeedView.swift # For You tab
+    ├── SocialFeedView.swift     # Social tab
+    ├── ProfileView.swift        # Profile tab
+    ├── VenueDetailView.swift    # Venue detail modal
+    ├── MapFeedView.swift        # Map view
+    ├── FilterSheet.swift        # Filter modal
+    ├── UserSwitcherView.swift   # Demo user selector
+    └── Components/
+        ├── VenueCardView.swift
+        ├── HeroCardView.swift
+        ├── MatchMeterView.swift
+        ├── SkeletonView.swift
+        └── ActionItemToast.swift
+```
+
+### iOS dependencies
+
+Luna uses **zero external dependencies**, relying entirely on Apple's native frameworks:
+
+| Framework | Usage |
+|-----------|-------|
+| **SwiftUI** | All UI components (declarative views) |
+| **Combine** | Reactive state management (@Published, sink) |
+| **Foundation** | Networking (URLSession), JSON parsing, Date utilities |
+| **CoreData** | Local persistence (user preferences, offline cache) |
+| **MapKit** | Interactive map with venue pins |
+| **UIKit** | Haptic feedback (UIImpactFeedbackGenerator) |
+
+<Note>
+  **Why no third-party libraries?**
+  - Faster compile times
+  - Smaller binary size
+  - No version conflicts
+  - Better security (reduced attack surface)
+  - Apple frameworks are battle-tested and optimized
+</Note>
+
+### Build configurations
+
+#### Debug (default)
+
+- Optimizations disabled for faster builds
+- Debug symbols included
+- Assertions enabled
+- Logging verbose
+
+#### Release
+
+For production or performance testing:
+
+1. Select **Product → Scheme → Edit Scheme**
+2. Change **Build Configuration** to **Release**
+3. Build and run (Cmd+R)
+
+Release builds:
+- Enable compiler optimizations (-O)
+- Strip debug symbols
+- Disable assertions
+- Reduce app size by ~30%
+
+## Environment configuration
+
+### Backend environment variables
+
+Create a `.env` file in `Luna-Backend/` for production configuration:
+
+```bash .env
+# Database
+DATABASE_URL=sqlite+aiosqlite:///./luna.db
+
+# CORS origins (comma-separated)
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+
+# Action item threshold
+BOOKING_THRESHOLD=5
+
+# Logging
+LOG_LEVEL=INFO
+```
+
+Load environment variables in `main.py`:
+
+```python
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+BOOKING_THRESHOLD = int(os.getenv("BOOKING_THRESHOLD", 5))
+```
+
+<Warning>
+  Don't commit `.env` files to version control. Add `.env` to `.gitignore`.
+</Warning>
+
+### iOS configuration files
+
+#### Info.plist
+
+Located at `name/Info.plist`, contains app metadata and permissions:
+
+```xml
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Luna uses your location to find nearby venues</string>
+
+<key>NSUserTrackingUsageDescription</key>
+<string>Help us improve your experience</string>
+```
+
+#### Config.xcconfig (optional)
+
+For advanced build configuration:
+
+```xcconfig
+// API Base URL by configuration
+API_BASE_URL_DEBUG = http://localhost:8000
+API_BASE_URL_RELEASE = https://api.yourdomain.com
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Python version too old">
+    Luna requires Python 3.10+ for modern async features.
+
+    **Check version:**
+    ```bash
+    python3 --version
+    ```
+
+    **Install Python 3.11 (recommended):**
+    ```bash
+    # macOS (using Homebrew)
+    brew install python@3.11
+    
+    # Verify installation
+    python3.11 --version
+    ```
+
+    **Update setup script to use Python 3.11:**
+    ```bash
+    # Edit setup.sh, replace python3 with python3.11
+    sed -i '' 's/python3/python3.11/g' setup.sh
+    ```
+  </Accordion>
+
+  <Accordion title="pip install fails with SSL errors">
+    Update certificates:
+
+    ```bash
+    # macOS - Install certificates
+    /Applications/Python\ 3.11/Install\ Certificates.command
+    
+    # Or upgrade pip and try again
+    python3 -m pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+
+  <Accordion title="SQLAlchemy async errors">
+    Ensure you have the correct versions:
+
+    ```bash
+    pip install sqlalchemy==2.0.35 aiosqlite==0.20.0 greenlet==3.1.1
+    ```
+
+    If errors persist, recreate the virtual environment:
+    ```bash
+    rm -rf venv
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+
+  <Accordion title="Xcode: 'No such module' errors">
+    **Clean build folder:**
+    ```
+    Product → Clean Build Folder (Cmd+Shift+K)
+    ```
+
+    **Reset package caches:**
+    ```
+    File → Packages → Reset Package Caches
+    ```
+
+    **Derived Data issues:**
+    ```bash
+    # Close Xcode, then:
+    rm -rf ~/Library/Developer/Xcode/DerivedData
+    
+    # Reopen project and rebuild
+    ```
+  </Accordion>
+
+  <Accordion title="iOS Simulator not showing up">
+    **Install additional simulators:**
+    1. Xcode → Settings (Cmd+,)
+    2. Platforms tab
+    3. Click "+" to download iOS simulators
+
+    **Reset simulator:**
+    ```bash
+    xcrun simctl erase all
+    ```
+
+    **Restart Simulator app:**
+    ```bash
+    killall Simulator
+    open -a Simulator
+    ```
+  </Accordion>
+
+  <Accordion title="Physical device: 'Untrusted Developer'">
+    When running on a physical device for the first time:
+
+    1. Go to **Settings** on your iOS device
+    2. Navigate to **General → VPN & Device Management**
+    3. Tap your Apple ID under **Developer App**
+    4. Tap **Trust**
+    5. Return to home screen and launch Luna
+  </Accordion>
+
+  <Accordion title="Backend: 'Address already in use'">
+    Port 8000 is occupied:
+
+    ```bash
+    # Find process using port 8000
+    lsof -i :8000
+    
+    # Kill it (replace PID with actual ID)
+    kill -9 <PID>
+    
+    # Or use a different port
+    uvicorn main:app --reload --port 8080
+    ```
+
+    Remember to update `baseURL` in iOS app if you change the port.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+Now that Luna is installed:
+
+<CardGroup cols={2}>
+  <Card
+    title="Run the quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get the demo running with all features
+  </Card>
+  <Card
+    title="API reference"
+    icon="book"
+    href="/api/overview"
+  >
+    Explore all backend endpoints
+  </Card>
+  <Card
+    title="Architecture guide"
+    icon="sitemap"
+    href="/ios/architecture"
+  >
+    Understand Luna's design patterns
+  </Card>
+  <Card
+    title="Design system"
+    icon="palette"
+    href="/ios/design-system"
+  >
+    Explore the design system
+  </Card>
+</CardGroup>

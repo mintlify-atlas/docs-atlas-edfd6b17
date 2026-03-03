@@ -1,0 +1,416 @@
+---
+title: "Backend Setup"
+description: "Set up and run the Luna FastAPI backend server"
+---
+
+## Prerequisites
+
+Before setting up the backend, ensure you have:
+
+<Steps>
+  <Step title="Python 3.8+">
+    The backend requires Python 3.8 or higher. Check your version:
+    
+    ```bash
+    python3 --version
+    ```
+  </Step>
+  
+  <Step title="pip">
+    Python package installer (usually comes with Python):
+    
+    ```bash
+    pip3 --version
+    ```
+  </Step>
+</Steps>
+
+## Quick Setup
+
+The fastest way to get started is using the provided setup script:
+
+<Steps>
+  <Step title="Navigate to backend directory">
+    ```bash
+    cd Luna-Backend
+    ```
+  </Step>
+  
+  <Step title="Run setup script">
+    ```bash
+    chmod +x setup.sh
+    ./setup.sh
+    ```
+    
+    This script will:
+    - Check your Python version
+    - Create a virtual environment
+    - Install all dependencies from `requirements.txt`
+  </Step>
+  
+  <Step title="Activate virtual environment">
+    ```bash
+    source venv/bin/activate
+    ```
+  </Step>
+  
+  <Step title="Start the server">
+    ```bash
+    uvicorn main:app --reload
+    ```
+  </Step>
+</Steps>
+
+## Manual Setup
+
+If you prefer to set up manually:
+
+<Steps>
+  <Step title="Create virtual environment">
+    ```bash
+    python3 -m venv venv
+    ```
+  </Step>
+  
+  <Step title="Activate virtual environment">
+    **macOS/Linux:**
+    ```bash
+    source venv/bin/activate
+    ```
+    
+    **Windows:**
+    ```bash
+    venv\Scripts\activate
+    ```
+  </Step>
+  
+  <Step title="Upgrade pip">
+    ```bash
+    pip install --upgrade pip
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    ```bash
+    pip install -r requirements.txt
+    ```
+  </Step>
+</Steps>
+
+## Understanding setup.sh
+
+The setup script automates the entire setup process:
+
+```bash setup.sh
+#!/bin/bash
+
+# Luna Backend Setup Script
+echo "🚀 Luna Backend Setup"
+echo "===================="
+
+# Navigate to backend directory
+cd "$(dirname "$0")"
+
+# Check Python version
+PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+echo "✓ Found Python $PYTHON_VERSION"
+
+# Create virtual environment if it doesn't exist
+if [ ! -d "venv" ]; then
+    echo "📦 Creating virtual environment..."
+    python3 -m venv venv
+    echo "✓ Virtual environment created"
+else
+    echo "✓ Virtual environment already exists"
+fi
+
+# Activate virtual environment
+echo "🔧 Activating virtual environment..."
+source venv/bin/activate
+
+# Upgrade pip
+echo "⬆️  Upgrading pip..."
+pip install --upgrade pip --quiet
+
+# Install dependencies
+echo "📚 Installing dependencies..."
+pip install -r requirements.txt --quiet
+
+echo ""
+echo "✅ Setup complete!"
+echo ""
+echo "To start the server, run:"
+echo "  source venv/bin/activate"
+echo "  uvicorn main:app --reload"
+echo ""
+echo "API will be available at: http://localhost:8000"
+echo "Interactive docs at: http://localhost:8000/docs"
+```
+
+## Dependencies
+
+The `requirements.txt` file includes all necessary packages:
+
+```txt requirements.txt
+# Core Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# Data Validation
+pydantic==2.9.0
+
+# Database (SQLite with async support)
+sqlalchemy==2.0.35
+aiosqlite==0.20.0
+greenlet==3.1.1
+```
+
+### Core Dependencies
+
+<AccordionGroup>
+  <Accordion title="FastAPI 0.115.0">
+    Modern web framework with automatic OpenAPI documentation, type hints, and async support.
+  </Accordion>
+  
+  <Accordion title="Uvicorn 0.32.0">
+    ASGI server for running FastAPI applications. The `[standard]` extra includes optimized dependencies.
+  </Accordion>
+  
+  <Accordion title="Pydantic 2.9.0">
+    Data validation library using Python type annotations. Validates all API requests and responses.
+  </Accordion>
+  
+  <Accordion title="SQLAlchemy 2.0.35">
+    Async ORM for database operations with full type safety.
+  </Accordion>
+  
+  <Accordion title="aiosqlite 0.20.0">
+    Async driver for SQLite databases, enabling non-blocking database queries.
+  </Accordion>
+</AccordionGroup>
+
+## Running the Server
+
+### Development Mode
+
+Run with auto-reload for development:
+
+```bash
+uvicorn main:app --reload
+```
+
+The `--reload` flag automatically restarts the server when code changes are detected.
+
+### Production Mode
+
+For production, run without reload and specify host/port:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+### Custom Port
+
+```bash
+uvicorn main:app --reload --port 3000
+```
+
+## Accessing the API
+
+Once the server is running, you can access:
+
+<CardGroup cols={2}>
+  <Card title="API Endpoint" icon="globe">
+    **http://localhost:8000**
+    
+    Main API endpoint for all requests
+  </Card>
+  
+  <Card title="Interactive Docs" icon="book-open">
+    **http://localhost:8000/docs**
+    
+    Swagger UI with interactive API testing
+  </Card>
+  
+  <Card title="Alternative Docs" icon="file-code">
+    **http://localhost:8000/redoc**
+    
+    ReDoc alternative documentation
+  </Card>
+  
+  <Card title="OpenAPI Schema" icon="code">
+    **http://localhost:8000/openapi.json**
+    
+    Raw OpenAPI schema JSON
+  </Card>
+</CardGroup>
+
+## Testing the API
+
+### Health Check
+
+Test if the server is running:
+
+```bash
+curl http://localhost:8000
+```
+
+Expected response:
+```json
+{
+  "message": "Luna Venue Discovery API",
+  "status": "running",
+  "version": "2.0.0",
+  "database": "SQLite"
+}
+```
+
+### Get All Venues
+
+```bash
+curl http://localhost:8000/venues
+```
+
+### Express Interest
+
+```bash
+curl -X POST http://localhost:8000/interests \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_1",
+    "venue_id": "venue_1"
+  }'
+```
+
+## Database Initialization
+
+The database is automatically initialized on first startup:
+
+<Steps>
+  <Step title="Database Creation">
+    SQLite database file `luna.db` is created in the backend directory
+  </Step>
+  
+  <Step title="Table Creation">
+    All 11 tables are created from SQLAlchemy models:
+    - users
+    - venues
+    - interests
+    - user_interests
+    - friendships
+    - action_items
+    - activities
+    - action_item_confirmations
+    - chats
+    - chat_participants
+    - chat_messages
+  </Step>
+  
+  <Step title="Data Seeding">
+    Initial seed data is loaded:
+    - 15 users with diverse interests
+    - 20 venues across NYC
+    - 55+ interest relationships
+    - All user pairs as friends
+  </Step>
+</Steps>
+
+## Resetting the Database
+
+To reset the database and reload seed data:
+
+```bash
+# Stop the server (Ctrl+C)
+
+# Delete the database file
+rm luna.db
+
+# Restart the server
+uvicorn main:app --reload
+```
+
+The database will be recreated and reseeded automatically.
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Port already in use">
+    If port 8000 is already in use:
+    
+    ```bash
+    # Use a different port
+    uvicorn main:app --reload --port 8001
+    ```
+    
+    Or kill the existing process:
+    ```bash
+    # Find process on port 8000
+    lsof -ti:8000
+    
+    # Kill the process
+    kill -9 $(lsof -ti:8000)
+    ```
+  </Accordion>
+  
+  <Accordion title="Module not found errors">
+    Ensure your virtual environment is activated:
+    
+    ```bash
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+  
+  <Accordion title="Database locked errors">
+    SQLite database is locked by another process:
+    
+    ```bash
+    # Close all connections
+    # Restart the server
+    uvicorn main:app --reload
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Environment Variables
+
+For production deployments, create a `.env` file:
+
+```bash .env
+# Database
+DATABASE_URL=sqlite+aiosqlite:///./luna.db
+
+# CORS Origins (comma-separated)
+ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+
+# Logging
+LOG_LEVEL=INFO
+
+# API Settings
+API_TITLE=Luna Venue Discovery API
+API_VERSION=2.0.0
+```
+
+<Warning>
+Never commit `.env` files to version control. Add `.env` to your `.gitignore` file.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Schema" icon="database" href="/backend/database-schema">
+    Learn about all database tables and relationships
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api/overview">
+    Explore all API endpoints
+  </Card>
+  
+  <Card title="Recommendation Algorithm" icon="brain" href="/backend/recommendation-algorithm">
+    Understand how venues are scored
+  </Card>
+  
+  <Card title="iOS Integration" icon="mobile" href="/ios/architecture">
+    Connect the iOS app to the backend
+  </Card>
+</CardGroup>

@@ -1,0 +1,573 @@
+---
+title: "Recommendation Algorithm"
+description: "Understand the multi-factor scoring system for personalized venue recommendations"
+---
+
+## Overview
+
+Luna uses a **multi-factor scoring algorithm** to provide personalized venue recommendations. The algorithm combines popularity, user preferences, social signals, and proximity to calculate a score out of 10 points.
+
+<Info>
+Scores are calculated based on **other users' interests only** (excluding the current user). This ensures venue positions remain stable when users toggle their own interest.
+</Info>
+
+## Scoring Formula
+
+The recommendation score is calculated using four weighted factors:
+
+```python
+Total Score (max 10.0) = Popularity Score (3.0) 
+                       + Category Match Score (2.5) 
+                       + Friend Interest Score (2.5) 
+                       + Proximity Score (2.0)
+```
+
+### Weight Distribution
+
+<CardGroup cols={2}>
+  <Card title="Popularity" icon="fire">
+    **30% (3.0 points)**
+    
+    Based on how many other users are interested
+  </Card>
+  
+  <Card title="Category Match" icon="tag">
+    **25% (2.5 points)**
+    
+    Matches user's interest categories
+  </Card>
+  
+  <Card title="Friend Interest" icon="users">
+    **25% (2.5 points)**
+    
+    How many friends are interested
+  </Card>
+  
+  <Card title="Proximity" icon="location-dot">
+    **20% (2.0 points)**
+    
+    Distance from user's location
+  </Card>
+</CardGroup>
+
+## Implementation
+
+### Core Algorithm
+
+```python main.py
+async def calculate_recommendation_score(session, user_id: str, venue_id: str):
+    """
+    Calculate recommendation score for a venue based on user preferences.
+    
+    CRITICAL: Score is based on OTHER users' interests, excluding the current user.
+    This ensures scores don't change when user toggles their own interest.
+    
+    Scoring factors (out of 10 points):
+    - Popularity (30% = 3.0 points) based on OTHER users interested
+    - Category match (25% = 2.5 points) based on user interests
+    - Friend interest (25% = 2.5 points) based on friends interested
+    - Proximity (20% = 2.0 points) based on distance from user
+    
+    Returns:
+        Tuple of (score, reason, friends_interested, total_interested, distance_km, score_breakdown)
+    """
+    # Get user and venue
+    user = await session.get(UserDB, user_id)
+    venue = await session.get(VenueDB, venue_id)
+    
+    if not user or not venue:
+        return 0.0, "Invalid user or venue", 0, 0, None, {}
+    
+    score = 0.0
+    reasons = []
+    
+    # Calculate distance
+    distance_km = haversine_distance(
+        user.latitude, user.longitude, 
+        venue.latitude, venue.longitude
+    )
+    
+    # Get total interested count (all users)
+    total_interested_count = await get_interested_count(session, venue_id)
+    
+    # Get count of OTHER users interested (excluding current user)
+    result = await session.execute(
+        select(func.count(InterestDB.user_id))
+        .where(
+            and_(
+                InterestDB.venue_id == venue_id,
+                InterestDB.user_id != user_id
+            )
+        )
+    )
+    other_users_interested = result.scalar() or 0
+    
+    # Get friends interested count
+    friends_interested = await count_friends_interested(session, user_id, venue_id)
+    
+    # Factor 1: Popularity (30% weight = 3.0 points max)
+    popularity_normalized = min(other_users_interested / 3, 1.0)
+    popularity_score = popularity_normalized * 3.0
+    score += popularity_score
+    if other_users_interested > 0:
+        reasons.append(f"Popular venue")
+    
+    # Factor 2: Category match (25% weight = 2.5 points max)
+    result = await session.execute(
+        select(UserInterestDB.interest_category)
+        .where(UserInterestDB.user_id == user_id)
+    )
+    user_interests = [row[0] for row in result.all()]
+    
+    venue_category_lower = venue.category.lower()
+    category_match = 0.0
+    for interest in user_interests:
+        if interest.lower() in venue_category_lower or venue_category_lower in interest.lower():
+            category_match = 1.0
+            reasons.append("Matches your interests")
+            break
+    category_score = category_match * 2.5
+    score += category_score
+    
+    # Factor 3: Friend interest (25% weight = 2.5 points max)
+    friend_normalized = min(friends_interested / 3, 1.0)
+    friend_score = friend_normalized * 2.5
+    score += friend_score
+    
+    # Factor 4: Proximity (20% weight = 2.0 points max)
+    proximity_score_value = calculate_proximity_score(distance_km)
+    proximity_score = proximity_score_value * 2.0
+    score += proximity_score
+    
+    # Add distance to reason if it's nearby
+    if distance_km <= 2:
+        reasons.append(f"{distance_km} km away")
+    
+    # Generate reason string
+    reason = ", ".join(reasons) if reasons else "New venue to explore"
+    
+    # Calculate score breakdown percentages (out of 100)
+    score_breakdown = {
+        "popularity": round((popularity_score / 3.0) * 30, 1),  # Max 30%
+        "category_match": round((category_score / 2.5) * 25, 1),  # Max 25%
+        "friend_signal": round((friend_score / 2.5) * 25, 1),  # Max 25%
+        "proximity": round((proximity_score / 2.0) * 20, 1)  # Max 20%
+    }
+    
+    return score, reason, friends_interested, total_interested_count, distance_km, score_breakdown
+```
+
+## Factor Breakdown
+
+### 1. Popularity Score (30%)
+
+Measures venue popularity based on **other users' interests** (excluding current user).
+
+```python
+# Normalize to 0-1 scale (3 users = 100% popularity)
+popularity_normalized = min(other_users_interested / 3, 1.0)
+
+# Scale to 3.0 points max (30% of 10)
+popularity_score = popularity_normalized * 3.0
+```
+
+**Examples:**
+- 0 other users interested → 0.0 points
+- 1 other user interested → 1.0 points
+- 2 other users interested → 2.0 points
+- 3+ other users interested → 3.0 points (max)
+
+<Warning>
+The score uses **other users' interests only** to prevent the score from changing when the current user toggles their interest. This keeps venue positions stable in the recommendations list.
+</Warning>
+
+### 2. Category Match Score (25%)
+
+Matches venue category against user's declared interests.
+
+```python
+# Get user's interest categories
+result = await session.execute(
+    select(UserInterestDB.interest_category)
+    .where(UserInterestDB.user_id == user_id)
+)
+user_interests = [row[0] for row in result.all()]
+
+# Check if venue category matches any user interest
+venue_category_lower = venue.category.lower()
+category_match = 0.0
+for interest in user_interests:
+    if interest.lower() in venue_category_lower or venue_category_lower in interest.lower():
+        category_match = 1.0
+        break
+
+# Scale to 2.5 points max (25% of 10)
+category_score = category_match * 2.5
+```
+
+**Examples:**
+- User interests: `["coffee", "food", "culture"]`
+- Venue category: `"Coffee Shop"` → **2.5 points** (match)
+- Venue category: `"Bar"` → **0.0 points** (no match)
+
+### 3. Friend Interest Score (25%)
+
+Boosts venues where friends have expressed interest.
+
+```python
+# Count friends interested in this venue
+friends_interested = await count_friends_interested(session, user_id, venue_id)
+
+# Normalize to 0-1 scale (3 friends = 100% friend signal)
+friend_normalized = min(friends_interested / 3, 1.0)
+
+# Scale to 2.5 points max (25% of 10)
+friend_score = friend_normalized * 2.5
+```
+
+**Examples:**
+- 0 friends interested → 0.0 points
+- 1 friend interested → 0.83 points
+- 2 friends interested → 1.67 points
+- 3+ friends interested → 2.5 points (max)
+
+**Friend Interest Calculation:**
+
+```python
+async def count_friends_interested(session, user_id: str, venue_id: str) -> int:
+    """Count how many friends are interested in a venue."""
+    # Get all friend IDs (bidirectional)
+    result = await session.execute(
+        select(FriendshipDB)
+        .where(
+            or_(
+                FriendshipDB.user_id == user_id,
+                FriendshipDB.friend_id == user_id
+            )
+        )
+    )
+    friendships = result.scalars().all()
+    
+    friend_ids = set()
+    for friendship in friendships:
+        if friendship.user_id == user_id:
+            friend_ids.add(friendship.friend_id)
+        else:
+            friend_ids.add(friendship.user_id)
+    
+    # Count how many friends are interested
+    if not friend_ids:
+        return 0
+    
+    result = await session.execute(
+        select(func.count(InterestDB.user_id))
+        .where(
+            and_(
+                InterestDB.venue_id == venue_id,
+                InterestDB.user_id.in_(friend_ids)
+            )
+        )
+    )
+    return result.scalar() or 0
+```
+
+### 4. Proximity Score (20%)
+
+Boosts nearby venues based on distance from user's location.
+
+```python utils/distance.py
+def calculate_proximity_score(distance_km: float) -> float:
+    """
+    Calculate proximity score based on distance.
+    
+    Returns a score from 0.0 to 1.0:
+    - 0-1 km: 1.0 (very close)
+    - 1-2 km: 0.75 (close)
+    - 2-5 km: 0.5 (moderate)
+    - 5-10 km: 0.25 (far)
+    - 10+ km: 0.0 (very far)
+    """
+    if distance_km <= 1:
+        return 1.0
+    elif distance_km <= 2:
+        return 0.75
+    elif distance_km <= 5:
+        return 0.5
+    elif distance_km <= 10:
+        return 0.25
+    else:
+        return 0.0
+
+# Scale to 2.0 points max (20% of 10)
+proximity_score_value = calculate_proximity_score(distance_km)
+proximity_score = proximity_score_value * 2.0
+```
+
+**Distance Calculation (Haversine Formula):**
+
+```python utils/distance.py
+import math
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate distance between two points on Earth using Haversine formula.
+    
+    Args:
+        lat1, lon1: First point coordinates (degrees)
+        lat2, lon2: Second point coordinates (degrees)
+    
+    Returns:
+        Distance in kilometers (rounded to 1 decimal)
+    """
+    # Earth's radius in kilometers
+    R = 6371.0
+    
+    # Convert degrees to radians
+    lat1_rad = math.radians(lat1)
+    lon1_rad = math.radians(lon1)
+    lat2_rad = math.radians(lat2)
+    lon2_rad = math.radians(lon2)
+    
+    # Haversine formula
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    
+    a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    
+    distance = R * c
+    return round(distance, 1)
+```
+
+## Score Examples
+
+### Example 1: Perfect Match
+
+**Scenario:**
+- 5 other users interested
+- Category matches user interests
+- 3 friends interested
+- 0.5 km away
+
+**Calculation:**
+```python
+Popularity:      min(5/3, 1.0) * 3.0 = 3.0 points
+Category Match:  1.0 * 2.5 = 2.5 points
+Friend Interest: min(3/3, 1.0) * 2.5 = 2.5 points
+Proximity:       1.0 * 2.0 = 2.0 points
+
+Total Score: 10.0 / 10.0 ⭐⭐⭐⭐⭐
+```
+
+### Example 2: Popular But Far
+
+**Scenario:**
+- 4 other users interested
+- No category match
+- 1 friend interested
+- 15 km away
+
+**Calculation:**
+```python
+Popularity:      min(4/3, 1.0) * 3.0 = 3.0 points
+Category Match:  0.0 * 2.5 = 0.0 points
+Friend Interest: min(1/3, 1.0) * 2.5 = 0.83 points
+Proximity:       0.0 * 2.0 = 0.0 points
+
+Total Score: 3.83 / 10.0 ⭐⭐
+```
+
+### Example 3: Close Match, Low Interest
+
+**Scenario:**
+- 1 other user interested
+- Category matches user interests
+- 0 friends interested
+- 1.5 km away
+
+**Calculation:**
+```python
+Popularity:      min(1/3, 1.0) * 3.0 = 1.0 points
+Category Match:  1.0 * 2.5 = 2.5 points
+Friend Interest: min(0/3, 1.0) * 2.5 = 0.0 points
+Proximity:       0.75 * 2.0 = 1.5 points
+
+Total Score: 5.0 / 10.0 ⭐⭐⭐
+```
+
+## Score Breakdown Response
+
+The API returns detailed score breakdown:
+
+```json
+{
+  "venue": {
+    "id": "venue_1",
+    "name": "Blue Bottle Coffee",
+    "category": "Coffee Shop",
+    "interested_count": 5,
+    "distance_km": 0.8
+  },
+  "score": 9.3,
+  "reason": "Popular venue, Matches your interests, 0.8 km away",
+  "already_interested": false,
+  "friends_interested": 2,
+  "total_interested": 5,
+  "score_breakdown": {
+    "popularity": 30.0,
+    "category_match": 25.0,
+    "friend_signal": 16.7,
+    "proximity": 20.0
+  }
+}
+```
+
+## API Endpoint
+
+```python main.py
+@app.get("/recommendations")
+async def get_recommendations(user_id: str):
+    """
+    Get personalized venue recommendations for a user.
+    
+    CRITICAL BEHAVIOR:
+    - Scores are calculated based on OTHER users' interests only (not including current user)
+    - This ensures venue positions DON'T change when user toggles their own interest
+    - Venues are sorted by score only, NOT by already_interested flag
+    - This keeps venues in consistent positions regardless of user's interest state
+    """
+    async with get_db() as session:
+        user = await session.get(UserDB, user_id)
+        
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User with id '{user_id}' not found")
+        
+        # Get venues user is already interested in
+        result = await session.execute(
+            select(InterestDB.venue_id)
+            .where(InterestDB.user_id == user_id)
+        )
+        user_interested_venue_ids = {row[0] for row in result.all()}
+        
+        # Get all venues
+        result = await session.execute(select(VenueDB))
+        venues = result.scalars().all()
+        
+        # Calculate scores for ALL venues
+        recommendations = []
+        for venue in venues:
+            score, reason, friends_interested, total_interested, distance_km, score_breakdown = \
+                await calculate_recommendation_score(session, user_id, venue.id)
+            
+            # Check if user is already interested
+            already_interested = venue.id in user_interested_venue_ids
+            
+            recommendations.append({
+                "venue": {
+                    "id": venue.id,
+                    "name": venue.name,
+                    "category": venue.category,
+                    "description": venue.description,
+                    "image": venue.image,
+                    "images": venue.images,
+                    "address": venue.address,
+                    "latitude": venue.latitude,
+                    "longitude": venue.longitude,
+                    "interested_count": total_interested,
+                    "distance_km": distance_km
+                },
+                "score": round(score, 1),
+                "reason": reason,
+                "already_interested": already_interested,
+                "friends_interested": friends_interested,
+                "total_interested": total_interested,
+                "score_breakdown": score_breakdown
+            })
+        
+        # Sort by score descending only
+        recommendations.sort(key=lambda x: -x["score"])
+        
+        return {"recommendations": recommendations}
+```
+
+## Performance Optimization
+
+The algorithm uses **batch loading** to avoid N+1 queries when calculating scores for multiple venues.
+
+### Without Batch Loading (Slow)
+
+```python
+# 3 queries per venue × 20 venues = 60 queries!
+for venue in venues:
+    interested_count = await get_interested_count(session, venue.id)
+    friends_interested = await count_friends_interested(session, user_id, venue.id)
+    user_interested = await check_user_interested(session, user_id, venue.id)
+```
+
+### With Batch Loading (Fast)
+
+```python
+# Only 3 queries total, regardless of venue count!
+venue_ids = [venue.id for venue in venues]
+
+interested_counts = await batch_get_interested_counts(session, venue_ids)
+friends_counts = await batch_count_friends_interested(session, user_id, venue_ids)
+user_interests = await batch_check_user_interests(session, user_id, venue_ids)
+
+# Now use pre-loaded data
+for venue in venues:
+    interested_count = interested_counts[venue.id]
+    friends_interested = friends_counts[venue.id]
+    user_interested = user_interests[venue.id]
+```
+
+## Tuning the Algorithm
+
+### Adjusting Weights
+
+To emphasize different factors, adjust the weight constants:
+
+```python
+# Current weights
+POPULARITY_WEIGHT = 3.0  # 30%
+CATEGORY_WEIGHT = 2.5    # 25%
+FRIEND_WEIGHT = 2.5      # 25%
+PROXIMITY_WEIGHT = 2.0   # 20%
+
+# Example: Emphasize proximity for local discovery
+POPULARITY_WEIGHT = 2.5  # 25%
+CATEGORY_WEIGHT = 2.5    # 25%
+FRIEND_WEIGHT = 2.0      # 20%
+PROXIMITY_WEIGHT = 3.0   # 30% (increased)
+```
+
+### Adjusting Normalization Thresholds
+
+```python
+# Current thresholds
+popularity_normalized = min(other_users_interested / 3, 1.0)  # 3 users = max
+friend_normalized = min(friends_interested / 3, 1.0)          # 3 friends = max
+
+# Example: Higher threshold for popularity
+popularity_normalized = min(other_users_interested / 5, 1.0)  # 5 users = max
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api/overview">
+    Test the recommendations endpoint
+  </Card>
+  
+  <Card title="Database Schema" icon="database" href="/backend/database-schema">
+    Understand the data model
+  </Card>
+  
+  <Card title="Setup Guide" icon="rocket" href="/backend/setup">
+    Run the backend locally
+  </Card>
+  
+  <Card title="iOS Integration" icon="mobile" href="/ios/architecture">
+    Connect to the iOS app
+  </Card>
+</CardGroup>

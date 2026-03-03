@@ -1,0 +1,366 @@
+---
+title: 'Social Feed'
+description: 'Endpoints for social activities and friend interactions'
+---
+
+## Get Activities Feed
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/activities?user_id=user_1&page=1&limit=20"
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "http://localhost:8000/activities",
+    params={
+        "user_id": "user_1",
+        "page": 1,
+        "limit": 20
+    }
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Query Parameters
+
+<ParamField query="user_id" type="string" optional>
+  User ID to filter friend activities. If not provided, returns all activities.
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination (1-indexed)
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of activities per page (max: 100)
+</ParamField>
+
+### Response
+
+<ResponseField name="activities" type="array">
+  Array of activity objects from friends
+  
+  <Expandable title="Activity Object">
+    <ResponseField name="id" type="string">
+      Unique activity identifier
+    </ResponseField>
+    
+    <ResponseField name="user" type="object">
+      User who performed the action
+      
+      <Expandable title="User Details">
+        <ResponseField name="id" type="string">
+          User identifier
+        </ResponseField>
+        
+        <ResponseField name="name" type="string">
+          User name
+        </ResponseField>
+        
+        <ResponseField name="avatar" type="string">
+          User avatar URL
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="venue" type="object">
+      Venue associated with the activity
+      
+      <Expandable title="Venue Details">
+        <ResponseField name="id" type="string">
+          Venue identifier
+        </ResponseField>
+        
+        <ResponseField name="name" type="string">
+          Venue name
+        </ResponseField>
+        
+        <ResponseField name="category" type="string">
+          Venue category
+        </ResponseField>
+        
+        <ResponseField name="image" type="string">
+          Venue image URL
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="action" type="string">
+      Type of action (e.g., "interested", "booked", "checked_in")
+    </ResponseField>
+    
+    <ResponseField name="timestamp" type="string">
+      ISO timestamp of when the activity occurred
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="page" type="integer">
+  Current page number
+</ResponseField>
+
+<ResponseField name="limit" type="integer">
+  Items per page
+</ResponseField>
+
+<ResponseField name="total_count" type="integer">
+  Total number of activities
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "activities": [
+    {
+      "id": "activity_user_2_venue_1_1704715200",
+      "user": {
+        "id": "user_2",
+        "name": "Bob Smith",
+        "avatar": "https://i.pravatar.cc/150?img=2"
+      },
+      "venue": {
+        "id": "venue_1",
+        "name": "Cozy Coffee Corner",
+        "category": "Cafe",
+        "image": "https://images.unsplash.com/photo-1..."
+      },
+      "action": "interested",
+      "timestamp": "2024-01-08T14:20:00"
+    }
+  ],
+  "page": 1,
+  "limit": 20,
+  "total_count": 15
+}
+```
+
+---
+
+## Get Social Feed
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/social/feed?user_id=user_1&page=1&limit=20"
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "http://localhost:8000/social/feed",
+    params={
+        "user_id": "user_1",
+        "page": 1,
+        "limit": 20
+    }
+)
+print(response.json())
+```
+</CodeGroup>
+
+### Query Parameters
+
+<ParamField query="user_id" type="string" required>
+  User ID to get social feed for
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination (1-indexed)
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of activities per page (max: 100)
+</ParamField>
+
+<ParamField query="since" type="string" optional>
+  ISO timestamp for incremental updates. Only returns activities created after this timestamp.
+</ParamField>
+
+### Response
+
+<ResponseField name="interest_activities" type="array">
+  Array of friend interest activities
+  
+  <Expandable title="Interest Activity Object">
+    <ResponseField name="id" type="string">
+      Activity identifier
+    </ResponseField>
+    
+    <ResponseField name="user" type="object">
+      Friend who expressed interest
+    </ResponseField>
+    
+    <ResponseField name="venue" type="object">
+      Venue they're interested in
+    </ResponseField>
+    
+    <ResponseField name="action" type="string">
+      Action type ("interested")
+    </ResponseField>
+    
+    <ResponseField name="timestamp" type="string">
+      ISO timestamp
+    </ResponseField>
+    
+    <ResponseField name="is_active" type="boolean">
+      Whether the interest is still active
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="highlighted_venues" type="array">
+  Venues where 5+ friends are interested
+  
+  <Expandable title="Highlighted Venue Object">
+    <ResponseField name="id" type="string">
+      Highlight identifier (format: "highlight_{venue_id}")
+    </ResponseField>
+    
+    <ResponseField name="venue_id" type="string">
+      Venue identifier
+    </ResponseField>
+    
+    <ResponseField name="venue_name" type="string">
+      Venue name
+    </ResponseField>
+    
+    <ResponseField name="venue_image_url" type="string">
+      Venue image URL
+    </ResponseField>
+    
+    <ResponseField name="venue_category" type="string">
+      Venue category
+    </ResponseField>
+    
+    <ResponseField name="venue_address" type="string">
+      Venue address
+    </ResponseField>
+    
+    <ResponseField name="interested_friends" type="array">
+      Array of friend objects (limited to 10 for display)
+      
+      <Expandable title="Friend Object">
+        <ResponseField name="id" type="string">
+          Friend user ID
+        </ResponseField>
+        
+        <ResponseField name="name" type="string">
+          Friend name
+        </ResponseField>
+        
+        <ResponseField name="avatar_url" type="string">
+          Friend avatar URL
+        </ResponseField>
+        
+        <ResponseField name="interested_timestamp" type="string">
+          When they expressed interest (ISO format)
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="total_interested_count" type="integer">
+      Total users interested (all users, not just friends)
+    </ResponseField>
+    
+    <ResponseField name="threshold" type="integer">
+      Friend threshold (default: 5)
+    </ResponseField>
+    
+    <ResponseField name="last_activity_timestamp" type="string">
+      Timestamp of most recent friend interest
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean">
+  Whether there are more activities to load
+</ResponseField>
+
+<ResponseField name="page" type="integer">
+  Current page number
+</ResponseField>
+
+<ResponseField name="limit" type="integer">
+  Items per page
+</ResponseField>
+
+<ResponseField name="total_count" type="integer">
+  Total number of activities
+</ResponseField>
+
+<ResponseField name="new_count" type="integer">
+  Number of new activities since the 'since' timestamp (0 if not provided)
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "interest_activities": [
+    {
+      "id": "activity_user_2_venue_1_1704715200",
+      "user": {
+        "id": "user_2",
+        "name": "Bob Smith",
+        "avatar": "https://i.pravatar.cc/150?img=2"
+      },
+      "venue": {
+        "id": "venue_1",
+        "name": "Cozy Coffee Corner",
+        "category": "Cafe",
+        "image": "https://images.unsplash.com/photo-1..."
+      },
+      "action": "interested",
+      "timestamp": "2024-01-08T14:20:00",
+      "is_active": true
+    }
+  ],
+  "highlighted_venues": [
+    {
+      "id": "highlight_venue_1",
+      "venue_id": "venue_1",
+      "venue_name": "Cozy Coffee Corner",
+      "venue_image_url": "https://images.unsplash.com/photo-1...",
+      "venue_category": "Cafe",
+      "venue_address": "123 Main St, San Francisco, CA",
+      "interested_friends": [
+        {
+          "id": "user_2",
+          "name": "Bob Smith",
+          "avatar_url": "https://i.pravatar.cc/150?img=2",
+          "interested_timestamp": "2024-01-08T14:20:00"
+        },
+        {
+          "id": "user_3",
+          "name": "Carol White",
+          "avatar_url": "https://i.pravatar.cc/150?img=3",
+          "interested_timestamp": "2024-01-07T10:15:00"
+        }
+      ],
+      "total_interested_count": 8,
+      "threshold": 5,
+      "last_activity_timestamp": "2024-01-08T14:20:00"
+    }
+  ],
+  "has_more": false,
+  "page": 1,
+  "limit": 20,
+  "total_count": 12,
+  "new_count": 0
+}
+```
+
+## Incremental Updates
+
+Use the `since` parameter for real-time polling:
+
+```bash
+curl "http://localhost:8000/social/feed?user_id=user_1&since=2024-01-08T14:20:00Z"
+```
+
+The `new_count` field indicates how many new activities have occurred since the specified timestamp, enabling badge notifications and real-time updates.

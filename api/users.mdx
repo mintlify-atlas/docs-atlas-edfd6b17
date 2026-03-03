@@ -1,0 +1,421 @@
+---
+title: 'Users'
+description: 'Endpoints for user profiles and user-specific data'
+---
+
+## Get User Profile
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/users/user_1"
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8000/users/user_1")
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="user_id" type="string" required>
+  The unique identifier of the user to retrieve
+</ParamField>
+
+### Response
+
+<ResponseField name="user" type="object">
+  User profile information
+  
+  <Expandable title="User Object">
+    <ResponseField name="id" type="string">
+      User identifier
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      User's full name
+    </ResponseField>
+    
+    <ResponseField name="avatar" type="string">
+      User's avatar image URL
+    </ResponseField>
+    
+    <ResponseField name="bio" type="string">
+      User biography/description
+    </ResponseField>
+    
+    <ResponseField name="interests" type="array">
+      Array of user interest categories (e.g., ["Cafe", "Restaurant", "Art Gallery"])
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="interested_venues" type="array">
+  List of venues the user is interested in
+  
+  <Expandable title="Venue Object">
+    <ResponseField name="id" type="string">
+      Venue identifier
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Venue name
+    </ResponseField>
+    
+    <ResponseField name="category" type="string">
+      Venue category
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Venue description
+    </ResponseField>
+    
+    <ResponseField name="image" type="string">
+      Primary image URL
+    </ResponseField>
+    
+    <ResponseField name="images" type="array">
+      Array of image URLs for galleries
+    </ResponseField>
+    
+    <ResponseField name="address" type="string">
+      Venue address
+    </ResponseField>
+    
+    <ResponseField name="latitude" type="float">
+      Latitude coordinate
+    </ResponseField>
+    
+    <ResponseField name="longitude" type="float">
+      Longitude coordinate
+    </ResponseField>
+    
+    <ResponseField name="interested_count" type="integer">
+      Total users interested
+    </ResponseField>
+    
+    <ResponseField name="distance_km" type="float">
+      Distance from user in kilometers
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="action_items" type="array">
+  Active action items for venues the user is interested in
+  
+  <Expandable title="Action Item Object">
+    <ResponseField name="id" type="string">
+      Action item identifier
+    </ResponseField>
+    
+    <ResponseField name="venue_id" type="string">
+      Associated venue ID
+    </ResponseField>
+    
+    <ResponseField name="interested_user_ids" type="array">
+      Array of user IDs interested in this venue
+    </ResponseField>
+    
+    <ResponseField name="action_type" type="string">
+      Type of action
+    </ResponseField>
+    
+    <ResponseField name="action_code" type="string">
+      Action code (e.g., "GROUP_VISIT")
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Human-readable action description
+    </ResponseField>
+    
+    <ResponseField name="threshold_met" type="boolean">
+      Whether the threshold was met
+    </ResponseField>
+    
+    <ResponseField name="status" type="string">
+      Status ("active", "completed", "dismissed", "expired")
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      ISO timestamp of creation
+    </ResponseField>
+    
+    <ResponseField name="venue" type="object">
+      Venue details associated with the action item
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "user": {
+    "id": "user_1",
+    "name": "Alice Johnson",
+    "avatar": "https://i.pravatar.cc/150?img=1",
+    "bio": "Coffee enthusiast and book lover. Always looking for cozy cafes and new experiences!",
+    "interests": [
+      "Cafe",
+      "Restaurant",
+      "Art Gallery"
+    ]
+  },
+  "interested_venues": [
+    {
+      "id": "venue_1",
+      "name": "Cozy Coffee Corner",
+      "category": "Cafe",
+      "description": "A warm and inviting coffee shop.",
+      "image": "https://images.unsplash.com/photo-1...",
+      "images": [
+        "https://images.unsplash.com/photo-1..."
+      ],
+      "address": "123 Main St, San Francisco, CA",
+      "latitude": 37.7749,
+      "longitude": -122.4194,
+      "interested_count": 8,
+      "distance_km": 1.2
+    }
+  ],
+  "action_items": [
+    {
+      "id": "action_item_123",
+      "venue_id": "venue_1",
+      "interested_user_ids": [
+        "user_1",
+        "user_2",
+        "user_3",
+        "user_4",
+        "user_5"
+      ],
+      "action_type": "group_visit",
+      "action_code": "GROUP_VISIT",
+      "description": "5 people want to visit Cozy Coffee Corner - plan a group meetup!",
+      "threshold_met": true,
+      "status": "active",
+      "created_at": "2024-01-05T10:00:00",
+      "venue": {
+        "id": "venue_1",
+        "name": "Cozy Coffee Corner",
+        "category": "Cafe",
+        "description": "A warm and inviting coffee shop.",
+        "image": "https://images.unsplash.com/photo-1...",
+        "address": "123 Main St, San Francisco, CA"
+      }
+    }
+  ]
+}
+```
+
+### Error Responses
+
+<ResponseField name="404" type="Not Found">
+  User with the specified ID does not exist
+</ResponseField>
+
+```json
+{
+  "detail": "User with id 'invalid_user' not found"
+}
+```
+
+---
+
+## Get User Action Items
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/users/user_1/action-items"
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8000/users/user_1/action-items")
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="user_id" type="string" required>
+  The unique identifier of the user
+</ParamField>
+
+### Response
+
+<ResponseField name="action_items" type="array">
+  Array of active action items where the user is in interested_user_ids
+</ResponseField>
+
+<ResponseField name="count" type="integer">
+  Number of active action items
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "action_items": [
+    {
+      "id": "action_item_123",
+      "venue_id": "venue_1",
+      "action_type": "group_visit",
+      "action_code": "GROUP_VISIT",
+      "description": "5 people want to visit Cozy Coffee Corner",
+      "status": "active",
+      "created_at": "2024-01-05T10:00:00",
+      "expires_at": "2024-04-05T10:00:00",
+      "venue": {
+        "id": "venue_1",
+        "name": "Cozy Coffee Corner",
+        "category": "Cafe",
+        "image": "https://images.unsplash.com/photo-1...",
+        "address": "123 Main St, San Francisco, CA",
+        "distance_km": 1.2
+      },
+      "interested_users": [
+        {
+          "id": "user_1",
+          "name": "Alice Johnson",
+          "avatar": "https://i.pravatar.cc/150?img=1"
+        },
+        {
+          "id": "user_2",
+          "name": "Bob Smith",
+          "avatar": "https://i.pravatar.cc/150?img=2"
+        }
+      ],
+      "interested_count": 5,
+      "go_ahead_initiated": false
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+## Get Archived Action Items
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/users/user_1/action-items/archive"
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8000/users/user_1/action-items/archive")
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="user_id" type="string" required>
+  The unique identifier of the user
+</ParamField>
+
+### Response
+
+<ResponseField name="archived_items" type="array">
+  Array of archived action items (dismissed, expired, or completed)
+</ResponseField>
+
+<ResponseField name="count" type="integer">
+  Number of archived action items
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "archived_items": [
+    {
+      "id": "action_item_456",
+      "venue_id": "venue_2",
+      "action_code": "GROUP_VISIT",
+      "description": "5 people wanted to visit Urban Espresso",
+      "status": "completed",
+      "status_badge": "COMPLETED",
+      "created_at": "2023-12-15T10:00:00",
+      "archived_at": "2024-01-05T16:30:00",
+      "venue": {
+        "id": "venue_2",
+        "name": "Urban Espresso",
+        "category": "Cafe",
+        "image": "https://images.unsplash.com/photo-2..."
+      }
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+## Get User Chats
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8000/users/user_1/chats"
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8000/users/user_1/chats")
+print(response.json())
+```
+</CodeGroup>
+
+### Path Parameters
+
+<ParamField path="user_id" type="string" required>
+  The unique identifier of the user
+</ParamField>
+
+### Response
+
+<ResponseField name="chats" type="array">
+  Array of chat objects where the user is a participant
+</ResponseField>
+
+<ResponseField name="count" type="integer">
+  Number of chats
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "chats": [
+    {
+      "id": "chat_123",
+      "venue": {
+        "id": "venue_1",
+        "name": "Cozy Coffee Corner",
+        "category": "Cafe",
+        "image": "https://images.unsplash.com/photo-1..."
+      },
+      "participant_count": 3,
+      "participant_avatars": [
+        "https://i.pravatar.cc/150?img=1",
+        "https://i.pravatar.cc/150?img=2",
+        "https://i.pravatar.cc/150?img=3"
+      ],
+      "last_message": {
+        "sender_name": "Bob Smith",
+        "content": "See you all at 3pm tomorrow!",
+        "created_at": "2024-01-08T15:30:00"
+      },
+      "created_at": "2024-01-08T14:00:00"
+    }
+  ],
+  "count": 1
+}
+```

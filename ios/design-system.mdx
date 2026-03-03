@@ -1,0 +1,564 @@
+---
+title: 'Design System'
+description: 'Comprehensive guide to Theme.swift - colors, typography, spacing, animations, and elevation system'
+---
+
+The Luna iOS app uses a centralized design system defined in `Theme.swift` to ensure visual consistency across all views. The design system includes semantic colors with dark mode support, responsive typography, standardized spacing, and smooth animations.
+
+## Overview
+
+All design tokens are defined in the `Theme` struct:
+
+```swift name/Design/Theme.swift
+struct Theme {
+    struct Colors { /* Color palette */ }
+    struct Fonts { /* Typography scale */ }
+    struct Layout { /* Spacing and sizing */ }
+    struct Animation { /* Animation presets */ }
+    struct Elevation { /* Shadow system */ }
+}
+```
+
+## Colors
+
+The color system adapts automatically to light and dark mode using semantic color definitions.
+
+### Brand Colors
+
+```swift name/Design/Theme.swift
+// Primary brand color - Vibrant blue for main actions
+static let primary = Color(red: 0.0, green: 0.478, blue: 1.0) // #007AFF
+
+// Secondary brand color - Deep purple for emphasis
+static let secondary = Color(red: 0.345, green: 0.337, blue: 0.839) // #5856D6
+
+// Accent color - Energetic coral for key interactions
+static let accent = Color(red: 1.0, green: 0.271, blue: 0.227) // #FF4538
+```
+
+<Tabs>
+  <Tab title="Light Mode">
+    - **Primary**: `#007AFF` - iOS system blue
+    - **Secondary**: `#5856D6` - Deep purple
+    - **Accent**: `#FF4538` - Vibrant coral
+  </Tab>
+  <Tab title="Dark Mode">
+    Colors remain the same but appear more vibrant against dark backgrounds due to increased contrast.
+  </Tab>
+</Tabs>
+
+### Semantic Backgrounds
+
+Background colors automatically adapt to light/dark mode:
+
+```swift
+// Primary background - Adapts to light/dark mode
+static let background = Color(uiColor: .systemBackground)
+
+// Secondary background - Slightly elevated surfaces
+static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
+
+// Card background with subtle differentiation
+static let cardBackground = Color(uiColor: .systemBackground)
+
+// Elevated surface for dark mode
+static let elevatedBackground = Color(uiColor: .secondarySystemBackground)
+```
+
+<Note>
+Using `UIColor.system*` colors ensures WCAG-compliant contrast ratios in both light and dark modes.
+</Note>
+
+### Text Colors
+
+Text colors provide hierarchical emphasis:
+
+```swift
+// Primary text - Maximum contrast
+static let textPrimary = Color(uiColor: .label)
+
+// Secondary text - Reduced emphasis
+static let textSecondary = Color(uiColor: .secondaryLabel)
+
+// Tertiary text - Minimal emphasis
+static let textTertiary = Color(uiColor: .tertiaryLabel)
+
+// Quaternary text - Disabled or placeholder
+static let textQuaternary = Color(uiColor: .quaternaryLabel)
+```
+
+**Usage Example:**
+
+```swift
+VStack(alignment: .leading) {
+    Text("Venue Name")
+        .foregroundColor(Theme.Colors.textPrimary)
+        .font(Theme.Fonts.title3)
+    
+    Text("2.5 km away")
+        .foregroundColor(Theme.Colors.textSecondary)
+        .font(Theme.Fonts.subheadline)
+    
+    Text("Tap to view details")
+        .foregroundColor(Theme.Colors.textTertiary)
+        .font(Theme.Fonts.caption)
+}
+```
+
+### Status Colors
+
+```swift
+static let success = Color(red: 0.204, green: 0.780, blue: 0.349) // Green
+static let warning = Color(red: 1.0, green: 0.584, blue: 0.0)     // Orange
+static let error = Color(red: 1.0, green: 0.231, blue: 0.188)     // Red
+static let info = Color(red: 0.0, green: 0.478, blue: 1.0)        // Blue
+```
+
+### Category Colors
+
+Each venue category has a dedicated color for visual consistency:
+
+```swift name/Design/Theme.swift
+struct Category {
+    static let coffee = Color(red: 0.545, green: 0.353, blue: 0.169)      // Brown
+    static let restaurant = Color(red: 1.0, green: 0.584, blue: 0.0)      // Orange
+    static let bar = Color(red: 0.686, green: 0.322, blue: 0.871)         // Purple
+    static let cultural = Color(red: 0.204, green: 0.780, blue: 0.349)    // Green
+    static let outdoor = Color(red: 0.188, green: 0.690, blue: 0.780)     // Teal
+    static let entertainment = Color(red: 1.0, green: 0.176, blue: 0.333) // Pink
+    
+    /// Returns the category color for a given category string
+    static func color(for category: String) -> Color {
+        switch category.lowercased() {
+        case "coffee shop", "coffee", "café", "cafe":
+            return coffee
+        case "restaurant", "food", "dining":
+            return restaurant
+        case "bar", "nightlife", "pub", "lounge":
+            return bar
+        case "museum", "cultural", "culture", "art", "gallery":
+            return cultural
+        case "park", "outdoor", "nature":
+            return outdoor
+        case "entertainment", "theater", "cinema":
+            return entertainment
+        default:
+            return Color(uiColor: .systemGray)
+        }
+    }
+    
+    /// Returns SF Symbol icon name for a given category
+    static func icon(for category: String) -> String {
+        switch category.lowercased() {
+        case "coffee shop": return "cup.and.saucer.fill"
+        case "restaurant": return "fork.knife"
+        case "bar": return "wineglass.fill"
+        case "museum": return "building.columns.fill"
+        case "park": return "leaf.fill"
+        case "entertainment": return "theatermasks.fill"
+        default: return "mappin.circle.fill"
+        }
+    }
+}
+```
+
+**Usage:**
+
+```swift
+Text(venue.category)
+    .foregroundColor(.white)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 6)
+    .background(Theme.Colors.Category.color(for: venue.category))
+    .clipShape(Capsule())
+```
+
+## Typography
+
+The typography scale uses San Francisco Rounded for a modern, friendly feel:
+
+```swift name/Design/Theme.swift
+struct Fonts {
+    // Large title (34pt, bold) - Hero headlines
+    static let largeTitle = Font.system(size: 34, weight: .bold, design: .rounded)
+    
+    // Title 1 (28pt, bold) - Page titles
+    static let title = Font.system(size: 28, weight: .bold, design: .rounded)
+    
+    // Title 2 (22pt, semibold) - Section headers
+    static let title2 = Font.system(size: 22, weight: .semibold, design: .rounded)
+    
+    // Title 3 (20pt, semibold) - Subsection headers
+    static let title3 = Font.system(size: 20, weight: .semibold, design: .rounded)
+    
+    // Headline (17pt, semibold) - Emphasised content
+    static let headline = Font.system(size: 17, weight: .semibold)
+    
+    // Body (17pt, regular) - Primary content
+    static let body = Font.system(size: 17, weight: .regular)
+    
+    // Callout (16pt, regular) - Secondary content
+    static let callout = Font.system(size: 16, weight: .regular)
+    
+    // Subheadline (15pt, regular) - Less prominent text
+    static let subheadline = Font.system(size: 15, weight: .regular)
+    
+    // Footnote (13pt, regular) - Supplementary info
+    static let footnote = Font.system(size: 13, weight: .regular)
+    
+    // Caption 1 (12pt, regular) - Small labels
+    static let caption = Font.system(size: 12, weight: .regular)
+    
+    // Caption 2 (11pt, regular) - Tiny labels
+    static let caption2 = Font.system(size: 11, weight: .regular)
+}
+```
+
+### Typography Hierarchy
+
+<AccordionGroup>
+  <Accordion title="Display (34-28pt)">
+    Use for hero headlines and page titles:
+    ```swift
+    Text("Discover Venues")
+        .font(Theme.Fonts.title)
+    ```
+  </Accordion>
+  
+  <Accordion title="Headings (22-20pt)">
+    Use for section and subsection headers:
+    ```swift
+    Text("Recommended")
+        .font(Theme.Fonts.title2)
+    ```
+  </Accordion>
+  
+  <Accordion title="Body (17-16pt)">
+    Use for primary and secondary content:
+    ```swift
+    Text(venue.description)
+        .font(Theme.Fonts.body)
+    ```
+  </Accordion>
+  
+  <Accordion title="Support (15-11pt)">
+    Use for metadata, labels, and captions:
+    ```swift
+    Text("2.5 km away")
+        .font(Theme.Fonts.caption)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Layout & Spacing
+
+### Spacing Scale
+
+```swift name/Design/Theme.swift
+struct Layout {
+    // Micro spacing (4pt) - Tight spacing between related elements
+    static let microSpacing: CGFloat = 4.0
+    
+    // Small spacing (8pt) - Compact layouts
+    static let smallSpacing: CGFloat = 8.0
+    
+    // Default spacing (12pt) - Standard element spacing
+    static let spacing: CGFloat = 12.0
+    
+    // Medium spacing (16pt) - Comfortable spacing
+    static let padding: CGFloat = 16.0
+    
+    // Large spacing (24pt) - Section separation
+    static let largeSpacing: CGFloat = 24.0
+    
+    // Extra large spacing (32pt) - Major sections
+    static let xlSpacing: CGFloat = 32.0
+    
+    // XXL spacing (48pt) - Maximum separation
+    static let xxlSpacing: CGFloat = 48.0
+}
+```
+
+**Usage:**
+
+```swift
+VStack(spacing: Theme.Layout.spacing) {
+    Text("Title")
+    Text("Subtitle")
+}
+.padding(Theme.Layout.padding)
+```
+
+### Corner Radius
+
+```swift
+// Small corner radius (8pt) - Subtle rounding
+static let smallCornerRadius: CGFloat = 8.0
+
+// Default corner radius (12pt) - Standard cards
+static let cornerRadius: CGFloat = 12.0
+
+// Large corner radius (16pt) - Prominent cards
+static let largeCornerRadius: CGFloat = 16.0
+
+// Extra large corner radius (24pt) - Hero elements
+static let xlCornerRadius: CGFloat = 24.0
+```
+
+### Sizing Constants
+
+```swift
+// Minimum tap target size (44pt) - iOS HIG standard
+static let minTapTarget: CGFloat = 44.0
+
+// Icon sizes
+static let iconSmall: CGFloat = 16.0
+static let iconMedium: CGFloat = 24.0
+static let iconLarge: CGFloat = 32.0
+
+// Aspect ratios
+static let heroImageAspectRatio: CGFloat = 16.0 / 9.0
+static let standardImageAspectRatio: CGFloat = 4.0 / 3.0
+```
+
+## Animations
+
+The app defines semantic animation presets for consistent motion:
+
+```swift name/Design/Theme.swift
+struct Animation {
+    // Quick animation (0.2s) - Instant feedback
+    static let quick = SwiftUI.Animation.easeInOut(duration: 0.2)
+    
+    // Default animation (0.3s) - Standard transitions
+    static let `default` = SwiftUI.Animation.easeInOut(duration: 0.3)
+    
+    // Gentle animation (0.4s) - Smooth transitions
+    static let gentle = SwiftUI.Animation.easeInOut(duration: 0.4)
+    
+    // Spring animation - Natural bouncy motion
+    static let spring = SwiftUI.Animation.spring(response: 0.3, dampingFraction: 0.7)
+    
+    // Bouncy spring - Playful overshoot
+    static let bouncy = SwiftUI.Animation.spring(response: 0.35, dampingFraction: 0.6)
+    
+    // Snappy spring - Quick responsive feel
+    static let snappy = SwiftUI.Animation.spring(response: 0.25, dampingFraction: 0.8)
+    
+    // Tab selection spring - Bouncy with overshoot
+    static let tabSelection = SwiftUI.Animation.spring(response: 0.4, dampingFraction: 0.65)
+    
+    // Icon micro-interaction - Quick playful bounce
+    static let iconBounce = SwiftUI.Animation.spring(response: 0.3, dampingFraction: 0.6)
+}
+```
+
+**Usage:**
+
+```swift
+Button {
+    withAnimation(Theme.Animation.spring) {
+        isExpanded.toggle()
+    }
+} label: {
+    Text("Expand")
+}
+.scaleEffect(isPressed ? 1.2 : 1.0)
+.animation(Theme.Animation.bouncy, value: isPressed)
+```
+
+### Animation Guidelines
+
+<CardGroup cols={2}>
+  <Card title="Button Taps" icon="hand-pointer">
+    Use `Theme.Animation.quick` for instant feedback
+  </Card>
+  <Card title="View Transitions" icon="arrow-right-arrow-left">
+    Use `Theme.Animation.default` or `Theme.Animation.gentle`
+  </Card>
+  <Card title="Playful Interactions" icon="face-smile">
+    Use `Theme.Animation.bouncy` for delightful overshoot
+  </Card>
+  <Card title="Tab Switching" icon="table-columns">
+    Use `Theme.Animation.tabSelection` for smooth navigation
+  </Card>
+</CardGroup>
+
+## Elevation System
+
+The elevation system provides consistent shadows for depth perception:
+
+```swift name/Design/Theme.swift
+struct Elevation {
+    // Low elevation - Subtle depth (2pt blur)
+    static func low(color: Color = Colors.Shadows.low) -> (color: Color, radius: CGFloat, x: CGFloat, y: CGFloat) {
+        (color, 2, 0, 1)
+    }
+    
+    // Medium elevation - Standard cards (8pt blur)
+    static func medium(color: Color = Colors.Shadows.medium) -> (color: Color, radius: CGFloat, x: CGFloat, y: CGFloat) {
+        (color, 8, 0, 4)
+    }
+    
+    // High elevation - Modals and overlays (16pt blur)
+    static func high(color: Color = Colors.Shadows.high) -> (color: Color, radius: CGFloat, x: CGFloat, y: CGFloat) {
+        (color, 16, 0, 8)
+    }
+}
+```
+
+### Elevation Extensions
+
+Convenient View extensions apply shadows:
+
+```swift name/Design/Theme.swift
+extension View {
+    func elevationLow() -> some View {
+        let shadow = Theme.Elevation.low()
+        return self.shadow(color: shadow.color, radius: shadow.radius, x: shadow.x, y: shadow.y)
+    }
+    
+    func elevationMedium() -> some View {
+        let shadow = Theme.Elevation.medium()
+        return self.shadow(color: shadow.color, radius: shadow.radius, x: shadow.x, y: shadow.y)
+    }
+    
+    func elevationHigh() -> some View {
+        let shadow = Theme.Elevation.high()
+        return self.shadow(color: shadow.color, radius: shadow.radius, x: shadow.x, y: shadow.y)
+    }
+}
+```
+
+**Usage:**
+
+```swift
+VStack {
+    // Card content
+}
+.background(Theme.Colors.cardBackground)
+.cornerRadius(Theme.Layout.cornerRadius)
+.elevationMedium() // Apply shadow
+```
+
+## Dark Mode Support
+
+The app automatically adapts to system dark mode using `ThemeManager`:
+
+```swift name/Design/ThemeManager.swift
+class ThemeManager: ObservableObject {
+    @AppStorage("isDarkMode") var isDarkMode: Bool = false
+    
+    var colorScheme: ColorScheme? {
+        isDarkMode ? .dark : .light
+    }
+    
+    func toggleTheme() {
+        withAnimation(Theme.Animation.default) {
+            isDarkMode.toggle()
+        }
+        
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+    }
+}
+```
+
+**Integration:**
+
+```swift name/nameApp.swift
+@main
+struct nameApp: App {
+    @StateObject private var themeManager = ThemeManager()
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(themeManager)
+                .preferredColorScheme(themeManager.colorScheme)
+        }
+    }
+}
+```
+
+**Toggle in UI:**
+
+```swift
+@EnvironmentObject var themeManager: ThemeManager
+
+Button {
+    themeManager.toggleTheme()
+} label: {
+    Image(systemName: themeManager.isDarkMode ? "sun.max.fill" : "moon.fill")
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Use Theme Constants">
+    ```swift
+    // ✅ Good
+    .foregroundColor(Theme.Colors.textPrimary)
+    .font(Theme.Fonts.body)
+    .padding(Theme.Layout.padding)
+    
+    // ❌ Bad
+    .foregroundColor(.black)
+    .font(.system(size: 17))
+    .padding(16)
+    ```
+  </Accordion>
+  
+  <Accordion title="Semantic Color Names">
+    Use semantic names instead of color values:
+    ```swift
+    // ✅ Good
+    Theme.Colors.textPrimary
+    Theme.Colors.background
+    
+    // ❌ Bad
+    Color.black
+    Color(red: 0, green: 0, blue: 0)
+    ```
+  </Accordion>
+  
+  <Accordion title="Consistent Spacing">
+    Use the spacing scale for vertical and horizontal spacing:
+    ```swift
+    // ✅ Good
+    VStack(spacing: Theme.Layout.spacing) { }
+    .padding(Theme.Layout.padding)
+    
+    // ❌ Bad
+    VStack(spacing: 14) { }
+    .padding(15)
+    ```
+  </Accordion>
+  
+  <Accordion title="Animation Consistency">
+    Use predefined animation presets:
+    ```swift
+    // ✅ Good
+    withAnimation(Theme.Animation.spring) {
+        isExpanded.toggle()
+    }
+    
+    // ❌ Bad
+    withAnimation(.easeInOut(duration: 0.25)) {
+        isExpanded.toggle()
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Views & Components" icon="cubes" href="/ios/views-and-components">
+    See design system in action with real components
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/ios/architecture">
+    Understand MVVM structure and app organization
+  </Card>
+</CardGroup>

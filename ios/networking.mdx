@@ -1,0 +1,659 @@
+---
+title: 'Networking'
+description: 'Complete guide to APIService implementation, async/await, error handling, and retry logic'
+---
+
+The Luna iOS app uses a protocol-based networking layer built on native `URLSession` with async/await for clean, testable API communication.
+
+## APIService Architecture
+
+### Protocol Definition
+
+The `APIServiceProtocol` defines all network operations:
+
+```swift name/Services/APIService.swift
+protocol APIServiceProtocol {
+    func fetchVenues(userId: String?, filters: VenueFilters?) async throws -> [VenueListItem]
+    func fetchVenueDetail(venueId: String) async throws -> VenueDetailResponse
+    func expressInterest(userId: String, venueId: String) async throws -> InterestResponse
+    func fetchUserProfile(userId: String) async throws -> UserProfileResponse
+    func fetchRecommendations(userId: String) async throws -> [RecommendationItem]
+    func fetchSocialFeed(userId: String, page: Int, limit: Int, since: Date?) async throws -> SocialFeedResponse
+    
+    // Action Items
+    func initiateActionItem(itemId: String, userId: String) async throws -> InitiateActionItemResponse
+    func confirmActionItem(itemId: String, userId: String) async throws -> ConfirmationActionResponse
+    func getActionItemStatus(itemId: String) async throws -> ActionItemStatusResponse
+    
+    // Chat
+    func fetchUserChats(userId: String) async throws -> [Chat]
+    func fetchChatMessages(chatId: String, since: String?) async throws -> ChatMessagesResponse
+    func sendMessage(chatId: String, userId: String, content: String) async throws -> SendMessageResponse
+}
+```
+
+<Note>
+**Protocol-Based Design:** Using protocols enables easy mocking for unit tests and flexibility to swap implementations.
+</Note>
+
+### Implementation
+
+```swift name/Services/APIService.swift
+class APIService: ObservableObject, APIServiceProtocol {
+    private let baseURL: String
+    private let session: URLSession
+    private let decoder: JSONDecoder
+    private let encoder: JSONEncoder
+    
+    nonisolated init(baseURL: String = "http://192.168.1.183:8000", session: URLSession = .shared) {
+        self.baseURL = baseURL
+        
+        // Configure URLSession
+        if session === URLSession.shared {
+            let configuration = URLSessionConfiguration.default
+            configuration.timeoutIntervalForRequest = 30.0
+            configuration.timeoutIntervalForResource = 60.0
+            configuration.waitsForConnectivity = true
+            
+            self.session = URLSession(configuration: configuration)
+        } else {
+            self.session = session
+        }
+        
+        // Configure JSON decoder
+        self.decoder = JSONDecoder()
+        self.decoder.dateDecodingStrategy = .custom { decoder in
+            // Custom date decoding to handle multiple ISO8601 formats
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            
+            let formatters: [ISO8601DateFormatter] = [
+                {
+                    let formatter = ISO8601DateFormatter()
+                    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                    return formatter
+                }(),
+                {
+                    let formatter = ISO8601DateFormatter()
+                    formatter.formatOptions = [.withInternetDateTime]
+                    return formatter
+                }()
+            ]
+            
+            for formatter in formatters {
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+            }
+            
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Cannot decode date: \(dateString)"
+            )
+        }
+        
+        self.encoder = JSONEncoder()
+        self.encoder.dateEncodingStrategy = .iso8601
+    }
+}
+```
+
+## Error Handling
+
+### APIError Enum
+
+Typed errors with user-friendly messages:
+
+```swift name/Services/APIService.swift
+enum APIError: LocalizedError {
+    case invalidURL
+    case networkError(Error)
+    case decodingError(Error)
+    case serverError(statusCode: Int, message: String)
+    case noData
+    case unknown
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Unable to connect to server (Invalid URL)"
+            
+        case .networkError(let error):
+            let nsError = error as NSError
+            if nsError.code == NSURLErrorNotConnectedToInternet {
+                return "No internet connection. Please check your network."
+            } else if nsError.code == NSURLErrorTimedOut {
+                return "Request timed out. Please try again."
+            } else if nsError.code == NSURLErrorCannotConnectToHost {
+                return "Unable to connect to server. Please try again."
+            } else if nsError.code == NSURLErrorNetworkConnectionLost {
+                return "Network connection was lost. Please check your connection and try again."
+            }
+            return "Network error: \(error.localizedDescription)"
+            
+        case .decodingError(let error):
+            return "Failed to process server response: \(error.localizedDescription)"
+            
+        case .serverError(let statusCode, let message):
+            if statusCode == 404 {
+                return "Content not found."
+            } else if statusCode == 500 {
+                return "Server error. Please try again later."
+            } else if statusCode >= 500 {
+                return "Server is experiencing issues. Please try again later."
+            }
+            return "Server error (\(statusCode)): \(message)"
+            
+        case .noData:
+            return "No data received from server."
+            
+        case .unknown:
+            return "An unexpected error occurred. Please try again."
+        }
+    }
+}
+```
+
+### Error Handling in Views
+
+```swift
+struct VenueFeedView: View {
+    @StateObject private var viewModel = VenueFeedViewModel()
+    
+    var body: some View {
+        Group {
+            if viewModel.isLoading {
+                ProgressView("Loading venues...")
+            } else if let error = viewModel.errorMessage {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 48))
+                        .foregroundColor(Theme.Colors.warning)
+                    
+                    Text(error)
+                        .font(Theme.Fonts.body)
+                        .foregroundColor(Theme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("Retry") {
+                        Task { await viewModel.loadVenues() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+            } else {
+                // Success state
+                ScrollView {
+                    LazyVStack {
+                        ForEach(viewModel.venues) { venue in
+                            VenueCardView(venue: venue)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+## Generic Request Method
+
+The core request method handles all HTTP operations:
+
+```swift name/Services/APIService.swift
+private func performRequest<T: Decodable>(
+    endpoint: String,
+    method: String,
+    queryItems: [URLQueryItem]? = nil,
+    body: Encodable? = nil
+) async throws -> T {
+    // Construct URL using URLComponents
+    guard var components = URLComponents(string: baseURL) else {
+        throw APIError.invalidURL
+    }
+    
+    components.path = endpoint
+    components.queryItems = queryItems
+    
+    guard let url = components.url else {
+        throw APIError.invalidURL
+    }
+    
+    var request = URLRequest(url: url)
+    request.httpMethod = method
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    
+    // Encode request body if provided
+    if let body = body {
+        do {
+            request.httpBody = try encoder.encode(body)
+        } catch {
+            throw APIError.decodingError(error)
+        }
+    }
+    
+    // Perform the request
+    let data: Data
+    let response: URLResponse
+    
+    do {
+        (data, response) = try await session.data(for: request)
+    } catch {
+        throw APIError.networkError(error)
+    }
+    
+    // Check HTTP status code
+    guard let httpResponse = response as? HTTPURLResponse else {
+        throw APIError.unknown
+    }
+    
+    guard (200...299).contains(httpResponse.statusCode) else {
+        let message = String(data: data, encoding: .utf8) ?? "Unknown error"
+        throw APIError.serverError(statusCode: httpResponse.statusCode, message: message)
+    }
+    
+    // Decode response
+    do {
+        let decodedResponse = try decoder.decode(T.self, from: data)
+        return decodedResponse
+    } catch {
+        print("Decoding error: \(error)")
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("Response JSON: \(jsonString)")
+        }
+        throw APIError.decodingError(error)
+    }
+}
+```
+
+## Retry Logic
+
+Automatic retry with exponential backoff for network errors:
+
+```swift name/Services/APIService.swift
+private func performRequestWithRetry<T: Decodable>(
+    endpoint: String,
+    method: String,
+    queryItems: [URLQueryItem]? = nil,
+    body: Encodable? = nil,
+    maxRetries: Int = 3
+) async throws -> T {
+    var lastError: APIError?
+    let retryDelays: [Double] = [0.5, 1.0, 2.0] // Exponential backoff in seconds
+    
+    for attempt in 0..<maxRetries {
+        do {
+            return try await performRequest(
+                endpoint: endpoint,
+                method: method,
+                queryItems: queryItems,
+                body: body
+            )
+        } catch let error as APIError {
+            lastError = error
+            
+            // Only retry on network errors, not server errors
+            switch error {
+            case .networkError:
+                if attempt < maxRetries - 1 {
+                    let delay = retryDelays[attempt]
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    continue
+                }
+            case .serverError, .decodingError, .invalidURL, .noData, .unknown:
+                throw error
+            }
+        } catch {
+            throw APIError.unknown
+        }
+    }
+    
+    throw lastError ?? APIError.unknown
+}
+```
+
+**Usage:**
+
+```swift
+// Critical operations use retry logic
+func completeActionItem(itemId: String, userId: String) async throws -> SuccessResponse {
+    let requestBody = CompleteActionItemRequest(user_id: userId)
+    return try await performRequestWithRetry(
+        endpoint: "/action-items/\(itemId)/complete",
+        method: "POST",
+        body: requestBody
+    )
+}
+```
+
+## API Endpoints
+
+### Fetch Venues
+
+```swift name/Services/APIService.swift
+func fetchVenues(userId: String? = nil, filters: VenueFilters? = nil) async throws -> [VenueListItem] {
+    var queryItems: [URLQueryItem] = []
+    
+    if let userId = userId {
+        queryItems.append(URLQueryItem(name: "user_id", value: userId))
+    }
+    
+    if let filters = filters {
+        // Categories filter
+        if filters.selectedCategories != ["All"] && !filters.selectedCategories.isEmpty {
+            let categoriesString = filters.selectedCategories.sorted().joined(separator: ",")
+            queryItems.append(URLQueryItem(name: "categories", value: categoriesString))
+        }
+        
+        // Distance filter
+        if let maxDistance = filters.distanceFilter.kilometers {
+            queryItems.append(URLQueryItem(name: "max_distance", value: String(maxDistance)))
+        }
+        
+        // Sort option
+        queryItems.append(URLQueryItem(name: "sort_by", value: filters.sortBy.rawValue))
+    }
+    
+    let response: VenuesResponse = try await performRequest(
+        endpoint: "/venues",
+        method: "GET",
+        queryItems: queryItems
+    )
+    return response.venues
+}
+```
+
+### Express Interest
+
+```swift name/Services/APIService.swift
+func expressInterest(userId: String, venueId: String) async throws -> InterestResponse {
+    let requestBody = InterestRequest(user_id: userId, venue_id: venueId)
+    return try await performRequest(
+        endpoint: "/interests",
+        method: "POST",
+        body: requestBody
+    )
+}
+```
+
+### Fetch Social Feed
+
+```swift name/Services/APIService.swift
+func fetchSocialFeed(
+    userId: String,
+    page: Int = 1,
+    limit: Int = 20,
+    since: Date? = nil
+) async throws -> SocialFeedResponse {
+    var queryItems = [
+        URLQueryItem(name: "user_id", value: userId),
+        URLQueryItem(name: "page", value: String(page)),
+        URLQueryItem(name: "limit", value: String(limit))
+    ]
+    
+    // Add since parameter for incremental updates
+    if let since = since {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        queryItems.append(URLQueryItem(name: "since", value: formatter.string(from: since)))
+    }
+    
+    return try await performRequest(
+        endpoint: "/social/feed",
+        method: "GET",
+        queryItems: queryItems
+    )
+}
+```
+
+### Send Chat Message
+
+```swift name/Services/APIService.swift
+func sendMessage(
+    chatId: String,
+    userId: String,
+    content: String
+) async throws -> SendMessageResponse {
+    let request = SendMessageRequest(user_id: userId, content: content)
+    return try await performRequestWithRetry(
+        endpoint: "/chats/\(chatId)/messages",
+        method: "POST",
+        body: request
+    )
+}
+```
+
+## Image Caching Service
+
+Separate service for two-tier image caching:
+
+```swift name/Services/ImageCacheService.swift
+@MainActor
+class ImageCacheService {
+    static let shared = ImageCacheService()
+    
+    private let memoryCache = NSCache<NSString, UIImage>()
+    private let diskCacheURL: URL
+    private let maxDiskCacheSize: Int64 = 100 * 1024 * 1024 // 100MB
+    
+    func loadImage(from urlString: String) async -> UIImage? {
+        let cacheKey = urlString as NSString
+        
+        // 1. Check memory cache (fastest)
+        if let cachedImage = memoryCache.object(forKey: cacheKey) {
+            return cachedImage
+        }
+        
+        // 2. Check disk cache (fast)
+        if let diskImage = await loadFromDisk(urlString: urlString) {
+            memoryCache.setObject(diskImage, forKey: cacheKey)
+            return diskImage
+        }
+        
+        // 3. Download from network (slowest)
+        if let downloadedImage = await downloadImage(from: urlString) {
+            memoryCache.setObject(downloadedImage, forKey: cacheKey)
+            await saveToDisk(image: downloadedImage, urlString: urlString)
+            return downloadedImage
+        }
+        
+        return nil
+    }
+    
+    private func downloadImage(from urlString: String) async -> UIImage? {
+        guard let url = URL(string: urlString) else { return nil }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                return nil
+            }
+            
+            return UIImage(data: data)
+        } catch {
+            print("Error downloading image: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    private func loadFromDisk(urlString: String) async -> UIImage? {
+        let filename = cacheFilename(for: urlString)
+        let fileURL = diskCacheURL.appendingPathComponent(filename)
+        
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+        
+        do {
+            let data = try Data(contentsOf: fileURL)
+            return UIImage(data: data)
+        } catch {
+            return nil
+        }
+    }
+    
+    private func saveToDisk(image: UIImage, urlString: String) async {
+        let filename = cacheFilename(for: urlString)
+        let fileURL = diskCacheURL.appendingPathComponent(filename)
+        
+        guard let data = image.jpegData(compressionQuality: 0.8) else { return }
+        
+        do {
+            try data.write(to: fileURL)
+            await evictOldestFilesIfNeeded()
+        } catch {
+            print("Error saving to disk: \(error.localizedDescription)")
+        }
+    }
+    
+    private func cacheFilename(for urlString: String) -> String {
+        let data = Data(urlString.utf8)
+        let hash = SHA256.hash(data: data)
+        return hash.map { String(format: "%02x", $0) }.joined() + ".jpg"
+    }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Async/Await">
+    Prefer async/await over completion handlers:
+    ```swift
+    // ✅ Good
+    let venues = try await apiService.fetchVenues(userId: userId)
+    
+    // ❌ Bad
+    apiService.fetchVenues(userId: userId) { result in
+        switch result {
+        case .success(let venues): // ...
+        case .failure(let error): // ...
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle All Error Cases">
+    Provide user-friendly messages for all error types:
+    ```swift
+    do {
+        let response = try await apiService.expressInterest(...)
+    } catch let error as APIError {
+        // Show specific error message
+        errorMessage = error.errorDescription
+    } catch {
+        // Fallback for unknown errors
+        errorMessage = "An unexpected error occurred"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Retry for Critical Operations">
+    Use `performRequestWithRetry` for important mutations:
+    ```swift
+    // ✅ Good - retry on network errors
+    func completeActionItem(...) async throws -> SuccessResponse {
+        return try await performRequestWithRetry(...)
+    }
+    
+    // ❌ Bad - no retry for critical operation
+    func completeActionItem(...) async throws -> SuccessResponse {
+        return try await performRequest(...)
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cache Images Aggressively">
+    Use `ImageCacheService` for all remote images:
+    ```swift
+    // ✅ Good
+    CachedAsyncImage(url: venue.image) { image in
+        image.resizable()
+    } placeholder: {
+        ProgressView()
+    }
+    
+    // ❌ Bad - no caching
+    AsyncImage(url: URL(string: venue.image)) { image in
+        image.resizable()
+    } placeholder: {
+        ProgressView()
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Testing
+
+### Mock API Service
+
+```swift
+class MockAPIService: APIServiceProtocol {
+    var mockVenues: [VenueListItem] = []
+    var mockError: APIError?
+    
+    func fetchVenues(userId: String?, filters: VenueFilters?) async throws -> [VenueListItem] {
+        if let error = mockError {
+            throw error
+        }
+        return mockVenues
+    }
+    
+    func expressInterest(userId: String, venueId: String) async throws -> InterestResponse {
+        if let error = mockError {
+            throw error
+        }
+        return InterestResponse(success: true, message: "Interest toggled")
+    }
+}
+```
+
+### Unit Test Example
+
+```swift
+import XCTest
+@testable import name
+
+class VenueFeedViewModelTests: XCTestCase {
+    func testLoadVenuesSuccess() async {
+        let mockService = MockAPIService()
+        mockService.mockVenues = [
+            VenueListItem(id: "1", name: "Test Venue", category: "Coffee Shop", image: "", interested_count: 5, distance_km: 2.0)
+        ]
+        
+        let viewModel = VenueFeedViewModel(apiService: mockService, appState: AppState.shared)
+        
+        await viewModel.loadVenues()
+        
+        XCTAssertEqual(viewModel.venues.count, 1)
+        XCTAssertEqual(viewModel.venues[0].name, "Test Venue")
+        XCTAssertNil(viewModel.errorMessage)
+    }
+    
+    func testLoadVenuesFailure() async {
+        let mockService = MockAPIService()
+        mockService.mockError = .networkError(NSError(domain: "", code: NSURLErrorNotConnectedToInternet))
+        
+        let viewModel = VenueFeedViewModel(apiService: mockService, appState: AppState.shared)
+        
+        await viewModel.loadVenues()
+        
+        XCTAssertTrue(viewModel.venues.isEmpty)
+        XCTAssertNotNil(viewModel.errorMessage)
+    }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="State Management" icon="database" href="/ios/state-management">
+    Learn how to integrate APIService with AppState
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/ios/architecture">
+    Understand MVVM and dependency injection
+  </Card>
+</CardGroup>

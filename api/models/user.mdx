@@ -1,0 +1,102 @@
+---
+title: "User"
+description: "User model representing a person using the venue discovery app"
+---
+
+## Overview
+
+The User model represents a person using the Luna venue discovery application. Each user has profile information, location data, and a list of interest categories that help personalize venue recommendations.
+
+## Model Definition
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the user (e.g., `"user_1"`).
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Full name of the user.
+</ResponseField>
+
+<ResponseField name="avatar" type="string" required>
+  URL to the user's avatar image.
+</ResponseField>
+
+<ResponseField name="bio" type="string" required>
+  Short biography or description of the user.
+</ResponseField>
+
+<ResponseField name="interests" type="array" required>
+  List of interest categories that the user is interested in (e.g., `["coffee", "food", "bars"]`).
+  
+  <Expandable title="Array Items">
+    <ResponseField name="[n]" type="string">
+      Interest category name. Common values include `"coffee"`, `"food"`, `"bars"`, `"restaurants"`, `"nightlife"`, etc.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Validation Rules
+
+- **id**: Required, must be a string (max 100 characters in database)
+- **name**: Required, must be a string (max 255 characters in database)
+- **avatar**: Required, must be a valid URL string (max 500 characters in database)
+- **bio**: Required, must be a string
+- **interests**: Required, must be a non-empty array of strings
+
+## Example Response
+
+```json
+{
+  "id": "user_1",
+  "name": "John Doe",
+  "avatar": "https://example.com/avatars/john-doe.jpg",
+  "bio": "Coffee lover and foodie exploring the best spots in SF",
+  "interests": [
+    "coffee",
+    "food",
+    "bars"
+  ]
+}
+```
+
+## Database Storage
+
+Users are stored in the `users` table with additional fields:
+
+<ResponseField name="latitude" type="float" required>
+  Geographic latitude coordinate of the user's location. Valid range: -90 to 90. Used for distance calculations but not exposed in API responses.
+</ResponseField>
+
+<ResponseField name="longitude" type="float" required>
+  Geographic longitude coordinate of the user's location. Valid range: -180 to 180. Used for distance calculations but not exposed in API responses.
+</ResponseField>
+
+<ResponseField name="created_at" type="datetime" required>
+  Timestamp when the user account was created. Automatically set on creation.
+</ResponseField>
+
+### Database Characteristics
+
+- **Primary Key**: `id`
+- **Interest Storage**: User interests are stored in a separate `user_interests` table with a one-to-many relationship
+- **Relationships**: 
+  - One-to-many with interests (venues the user is interested in)
+  - One-to-many with user_interests (interest categories)
+  - One-to-many with friendships
+  - One-to-many with activities (social feed)
+- **Cascade Deletion**: Deleting a user cascades to all related interests, friendships, and activities
+
+## Interest Categories
+
+The `interests` array contains string values representing categories the user is interested in. These are stored separately in the `user_interests` table:
+
+- Each interest is stored as a separate row with `user_id` and `interest_category`
+- A unique constraint prevents duplicate interest categories per user
+- Interest categories are indexed for efficient querying
+- Common categories include: `"coffee"`, `"food"`, `"bars"`, `"restaurants"`, `"nightlife"`, `"music"`, etc.
+
+## Usage Notes
+
+- Geographic coordinates (`latitude`, `longitude`) are required in the database for distance calculations but are not exposed in API responses for privacy
+- The `interests` array is automatically populated from the `user_interests` table when retrieving user data
+- User location is used to calculate the `distance_km` field on venue responses

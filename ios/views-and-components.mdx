@@ -1,0 +1,628 @@
+---
+title: 'Views & Components'
+description: 'Comprehensive guide to key views and reusable components in the Luna iOS app'
+---
+
+The Luna iOS app is built with modular, reusable SwiftUI components that follow the design system and MVVM architecture.
+
+## View Hierarchy
+
+```
+ContentView (Root)
+├── VenueFeedView
+├── RecommendedFeedView
+├── ActionTabView
+├── ProfileView
+└── CustomTabBarView (Overlay)
+```
+
+## Main Views
+
+### ContentView
+
+Root view managing tab navigation and global overlays:
+
+```swift name/ContentView.swift
+struct ContentView: View {
+    @ObservedObject private var appState = AppState.shared
+    
+    var body: some View {
+        ZStack {
+            // Current view based on selectedTab
+            Group {
+                switch appState.selectedTab {
+                case 0: VenueFeedView()
+                case 1: RecommendedFeedView()
+                case 2: ActionTabView()
+                case 3: ProfileView()
+                default: VenueFeedView()
+                }
+            }
+            
+            // Custom floating tab bar (hidden in detail views)
+            if !appState.isTabBarHidden {
+                VStack {
+                    Spacer()
+                    CustomTabBarView(
+                        selectedTab: $appState.selectedTab,
+                        socialBadgeCount: appState.newSocialActivityCount,
+                        profileBadgeCount: appState.actionItemCount
+                    )
+                }
+                .zIndex(100)
+            }
+            
+            // Global Action Item Toast Overlay
+            ActionItemToast(
+                actionItem: $appState.pendingActionItem,
+                isShowing: $appState.showActionItemToast
+            )
+            .zIndex(999)
+        }
+    }
+}
+```
+
+**Key Features:**
+- ZStack layout for overlays
+- Conditional tab bar visibility
+- Global toast notifications
+- Tab-based navigation via AppState
+
+### VenueFeedView
+
+Main discovery feed with filtering and infinite scroll:
+
+```swift
+struct VenueFeedView: View {
+    @StateObject private var viewModel: VenueFeedViewModel
+    @ObservedObject private var appState = AppState.shared
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                LazyVStack(spacing: Theme.Layout.padding) {
+                    ForEach(viewModel.venues) { venue in
+                        NavigationLink(destination: VenueDetailView(venueId: venue.id)) {
+                            VenueCardView(venue: venue) {
+                                // Callback on interest toggle
+                                Task { await viewModel.loadVenues() }
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding()
+            }
+            .refreshable {
+                await viewModel.refresh()
+            }
+            .navigationTitle("Discover")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        viewModel.showFilterSheet = true
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
+                }
+            }
+        }
+        .task {
+            await viewModel.loadVenues()
+        }
+    }
+}
+```
+
+**Features:**
+- Pull-to-refresh support
+- Lazy loading with LazyVStack
+- Filter button in toolbar
+- Navigation to detail views
+
+### VenueDetailView
+
+Detailed venue information with image gallery and actions:
+
+```swift
+struct VenueDetailView: View {
+    let venueId: String
+    @StateObject private var viewModel: VenueDetailViewModel
+    @ObservedObject private var appState = AppState.shared
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Image gallery
+                TabView {
+                    ForEach(viewModel.venue?.allImages ?? [], id: \.self) { imageURL in
+                        CachedAsyncImage(url: imageURL) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(16/9, contentMode: .fill)
+                        } placeholder: {
+                            ProgressView()
+                        }
+                    }
+                }
+                .frame(height: 250)
+                .tabViewStyle(.page)
+                
+                // Venue details
+                VStack(alignment: .leading, spacing: Theme.Layout.spacing) {
+                    Text(viewModel.venue?.name ?? "")
+                        .font(Theme.Fonts.title)
+                    
+                    Text(viewModel.venue?.description ?? "")
+                        .font(Theme.Fonts.body)
+                        .foregroundColor(Theme.Colors.textSecondary)
+                    
+                    // Interest button
+                    Button {
+                        Task {
+                            try? await appState.toggleInterest(venueId: venueId)
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: appState.isInterested(in: venueId) ? "heart.fill" : "heart")
+                            Text(appState.isInterested(in: venueId) ? "Interested" : "Mark as Interested")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Theme.Colors.primary)
+                        .foregroundColor(.white)
+                        .cornerRadius(Theme.Layout.cornerRadius)
+                    }
+                }
+                .padding(Theme.Layout.padding)
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await viewModel.loadVenue()
+        }
+    }
+}
+```
+
+## Reusable Components
+
+### VenueCardView
+
+Card component for venue preview with interest toggle:
+
+```swift name/Views/VenueCardView.swift
+struct VenueCardView: View {
+    let venue: VenueListItem
+    var onInterestToggled: (() -> Void)? = nil
+    
+    @ObservedObject private var appState = AppState.shared
+    @State private var localInterestedCount: Int
+    @State private var isAnimating = false
+    
+    init(venue: VenueListItem, onInterestToggled: (() -> Void)? = nil) {
+        self.venue = venue
+        self.onInterestToggled = onInterestToggled
+        _localInterestedCount = State(initialValue: venue.interested_count)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Venue image with cached loading
+            CachedAsyncImage(url: venue.image) { image in
+                image
+                    .resizable()
+                    .aspectRatio(4/3, contentMode: .fill)
+            } placeholder: {
+                Rectangle()
+                    .fill(Theme.Colors.secondaryBackground)
+                    .aspectRatio(4/3, contentMode: .fill)
+                    .overlay { ProgressView() }
+            } failure: {
+                Rectangle()
+                    .fill(categoryColor(for: venue.category).opacity(0.2))
+                    .aspectRatio(4/3, contentMode: .fill)
+                    .overlay {
+                        VStack(spacing: 8) {
+                            Image(systemName: categoryIcon(for: venue.category))
+                                .font(.system(size: 40))
+                                .foregroundColor(categoryColor(for: venue.category))
+                            Text("Image unavailable")
+                                .font(Theme.Fonts.caption)
+                                .foregroundColor(Theme.Colors.textSecondary)
+                        }
+                    }
+            }
+            .clipped()
+            
+            // Venue info section
+            VStack(alignment: .leading, spacing: Theme.Layout.smallSpacing) {
+                HStack {
+                    // Category badge
+                    Text(venue.category)
+                        .font(Theme.Fonts.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(categoryColor(for: venue.category))
+                        .clipShape(Capsule())
+                    
+                    Spacer()
+                    
+                    // Heart button for interest toggle
+                    Button { handleInterestTap() } label: {
+                        Image(systemName: isInterested ? "heart.fill" : "heart")
+                            .font(.system(size: 20))
+                            .foregroundColor(isInterested ? Theme.Colors.error : Theme.Colors.textSecondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .scaleEffect(isAnimating ? 1.2 : 1.0)
+                    .animation(Theme.Animation.spring, value: isAnimating)
+                }
+                .padding(.top, Theme.Layout.spacing)
+                
+                // Distance badge
+                if venue.distance_km != nil {
+                    DistanceBadge(distance_km: venue.distance_km)
+                }
+                
+                // Venue name
+                Text(venue.name)
+                    .font(Theme.Fonts.title3)
+                    .foregroundColor(Theme.Colors.textPrimary)
+                    .lineLimit(2)
+                
+                // Interested count
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2")
+                        .font(Theme.Fonts.caption)
+                    Text("\(localInterestedCount) people interested")
+                        .font(Theme.Fonts.subheadline)
+                }
+                .foregroundColor(Theme.Colors.textSecondary)
+                .padding(.bottom, Theme.Layout.spacing)
+            }
+            .padding(.horizontal, Theme.Layout.padding)
+        }
+        .background(Theme.Colors.cardBackground)
+        .cornerRadius(Theme.Layout.cornerRadius)
+        .elevationMedium()
+    }
+    
+    private var isInterested: Bool {
+        appState.isInterested(in: venue.id)
+    }
+    
+    private func handleInterestTap() {
+        guard !isAnimating else { return }
+        
+        isAnimating = true
+        let wasInterested = isInterested
+        
+        // Optimistic update
+        if wasInterested {
+            localInterestedCount = max(0, localInterestedCount - 1)
+        } else {
+            localInterestedCount += 1
+        }
+        
+        // Haptic feedback
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        
+        // Toggle interest via AppState
+        Task {
+            do {
+                let venueInfo = ActivityVenue(
+                    id: venue.id,
+                    name: venue.name,
+                    category: venue.category,
+                    image: venue.image
+                )
+                
+                let response = try await appState.toggleInterest(
+                    venueId: venue.id,
+                    venueInfo: venueInfo
+                )
+                
+                if response.success {
+                    await MainActor.run { onInterestToggled?() }
+                } else {
+                    // Revert on failure
+                    await MainActor.run {
+                        if wasInterested {
+                            localInterestedCount += 1
+                        } else {
+                            localInterestedCount = max(0, localInterestedCount - 1)
+                        }
+                    }
+                }
+            } catch {
+                // Revert on error
+                await MainActor.run {
+                    if wasInterested {
+                        localInterestedCount += 1
+                    } else {
+                        localInterestedCount = max(0, localInterestedCount - 1)
+                    }
+                }
+            }
+        }
+        
+        // Reset animation state
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            isAnimating = false
+        }
+    }
+}
+```
+
+**Key Features:**
+- Optimistic updates for instant feedback
+- Haptic feedback on interaction
+- Error handling with automatic rollback
+- Cached image loading
+- Category-based color coding
+
+### CachedAsyncImage
+
+Two-tier image caching (memory + disk) for offline support:
+
+```swift name/Views/Components/CachedAsyncImage.swift
+struct CachedAsyncImage<Content: View, Placeholder: View, Failure: View>: View {
+    let url: String
+    let content: (Image) -> Content
+    let placeholder: () -> Placeholder
+    let failure: () -> Failure
+    
+    @State private var loadedImage: UIImage?
+    @State private var isLoading = false
+    @State private var loadFailed = false
+    @State private var loadTimeout = false
+    
+    private let timeoutDuration: TimeInterval = 10.0
+    
+    var body: some View {
+        Group {
+            if let uiImage = loadedImage {
+                content(Image(uiImage: uiImage))
+            } else if loadFailed || loadTimeout {
+                failure()
+            } else {
+                placeholder()
+                    .onAppear { loadImage() }
+            }
+        }
+    }
+    
+    private func loadImage() {
+        guard !isLoading else { return }
+        
+        isLoading = true
+        
+        // Start timeout timer
+        let timeoutTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(timeoutDuration * 1_000_000_000))
+            await MainActor.run {
+                if isLoading && loadedImage == nil {
+                    loadTimeout = true
+                    isLoading = false
+                }
+            }
+        }
+        
+        // Load from cache or network
+        Task {
+            let image = await ImageCacheService.shared.loadImage(from: url)
+            await MainActor.run {
+                if let image = image {
+                    self.loadedImage = image
+                    self.loadFailed = false
+                } else {
+                    self.loadFailed = true
+                }
+                self.isLoading = false
+                timeoutTask.cancel()
+            }
+        }
+    }
+}
+```
+
+**Features:**
+- Memory cache (NSCache) for instant access
+- Disk cache (100MB LRU) for offline support
+- 10-second timeout for failed loads
+- Graceful failure states
+
+### CustomTabBarView
+
+Floating glassmorphic tab bar with animations:
+
+```swift name/Views/Components/CustomTabBarView.swift
+struct CustomTabBarView: View {
+    @Binding var selectedTab: Int
+    let socialBadgeCount: Int
+    let profileBadgeCount: Int
+    
+    @Namespace private var animation
+    @Environment(\.colorScheme) private var colorScheme
+    
+    private let tabs: [(icon: String, label: String, index: Int)] = [
+        ("house.fill", "Discover", 0),
+        ("star.fill", "For You", 1),
+        ("list.bullet.clipboard", "Action", 2),
+        ("person.fill", "Profile", 3)
+    ]
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(tabs, id: \.index) { tab in
+                tabButton(
+                    icon: tab.icon,
+                    label: tab.label,
+                    index: tab.index,
+                    badgeCount: badgeCount(for: tab.index)
+                )
+            }
+        }
+        .frame(height: 70)
+        .padding(.horizontal, 20)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 35)
+                    .fill(.ultraThinMaterial)
+                
+                RoundedRectangle(cornerRadius: 35)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: colorScheme == .dark ? [
+                                Color.white.opacity(0.25),
+                                Color.white.opacity(0.05)
+                            ] : [
+                                Color.white.opacity(0.5),
+                                Color.white.opacity(0.1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+            }
+            .shadow(color: Theme.Colors.primary.opacity(0.15), radius: 20, x: 0, y: 8)
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+    
+    @ViewBuilder
+    private func tabButton(icon: String, label: String, index: Int, badgeCount: Int) -> some View {
+        Button {
+            withAnimation(Theme.Animation.tabSelection) {
+                selectedTab = index
+            }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    AnimatedTabIcon(
+                        type: tabType(for: index),
+                        isSelected: selectedTab == index
+                    )
+                    
+                    if badgeCount > 0 {
+                        DynamicBadgeView(count: badgeCount)
+                            .offset(x: 14, y: -14)
+                    }
+                }
+                .frame(width: 32, height: 32)
+                
+                Text(label)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundColor(selectedTab == index ? .white : Theme.Colors.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                Group {
+                    if selectedTab == index {
+                        RoundedRectangle(cornerRadius: 35)
+                            .fill(.ultraThinMaterial)
+                            .matchedGeometryEffect(id: "TAB_INDICATOR", in: animation)
+                    }
+                }
+            )
+        }
+    }
+}
+```
+
+**Features:**
+- Glassmorphic design with frosted background
+- Smooth pill animation with matchedGeometryEffect
+- Dynamic badge counts
+- Swipe gesture support
+- Dark mode adaptive styling
+
+### DistanceBadge
+
+Displays distance with nearby pulsing animation:
+
+```swift
+struct DistanceBadge: View {
+    let distance_km: Double?
+    @State private var isPulsing = false
+    
+    private var isNearby: Bool {
+        guard let distance = distance_km else { return false }
+        return distance < 1.0
+    }
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "location.fill")
+                .font(Theme.Fonts.caption)
+            Text(formattedDistance)
+                .font(Theme.Fonts.caption)
+        }
+        .foregroundColor(isNearby ? Theme.Colors.primary : Theme.Colors.textSecondary)
+        .scaleEffect(isPulsing ? 1.05 : 1.0)
+        .animation(isNearby ? Theme.Animation.nearbyPulse : nil, value: isPulsing)
+        .onAppear {
+            if isNearby { isPulsing = true }
+        }
+    }
+    
+    private var formattedDistance: String {
+        guard let km = distance_km else { return "" }
+        if km < 1.0 {
+            return String(format: "%.0f m", km * 1000)
+        }
+        return String(format: "%.1f km", km)
+    }
+}
+```
+
+## Component Guidelines
+
+<AccordionGroup>
+  <Accordion title="State Management">
+    - Use `@State` for local component state (animations, temporary UI state)
+    - Use `@ObservedObject` for shared state (AppState)
+    - Use `@StateObject` for owned ViewModels
+    - Pass callbacks for parent notification
+  </Accordion>
+  
+  <Accordion title="Performance">
+    - Use `LazyVStack` for large scrollable lists
+    - Implement cached image loading
+    - Avoid heavy computations in body
+    - Use `equatable` conformance for complex views
+  </Accordion>
+  
+  <Accordion title="Accessibility">
+    - Add `.accessibilityLabel()` to all interactive elements
+    - Ensure minimum 44x44pt tap targets
+    - Use semantic colors for proper contrast
+    - Support Dynamic Type sizing
+  </Accordion>
+  
+  <Accordion title="Reusability">
+    - Extract repeated patterns into components
+    - Use ViewBuilder for flexible layouts
+    - Provide sensible default parameters
+    - Document component usage with examples
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="State Management" icon="database" href="/ios/state-management">
+    Learn about AppState and reactive programming
+  </Card>
+  <Card title="Design System" icon="palette" href="/ios/design-system">
+    Understand Theme.swift and styling
+  </Card>
+</CardGroup>
