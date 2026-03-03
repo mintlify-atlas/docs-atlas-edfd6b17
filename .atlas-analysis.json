@@ -1,0 +1,109 @@
+{
+  "projectType": "saas",
+  "projectName": "Luna",
+  "projectDescription": "Social venue discovery platform with intelligent recommendations, real-time feeds, and automated booking coordination",
+  "theme": "palm",
+  "primaryColor": "#007AFF",
+  "lightColor": "#5856D6",
+  "darkColor": "#34C759",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/venue-discovery",
+              "features/personalized-recommendations",
+              "features/social-feed",
+              "features/action-items",
+              "features/booking-coordination"
+            ]
+          },
+          {
+            "group": "iOS App",
+            "pages": [
+              "ios/architecture",
+              "ios/design-system",
+              "ios/views-and-components",
+              "ios/state-management",
+              "ios/networking"
+            ]
+          },
+          {
+            "group": "Backend API",
+            "pages": [
+              "backend/overview",
+              "backend/setup",
+              "backend/database-schema",
+              "backend/recommendation-algorithm"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/running-locally",
+              "guides/configuration",
+              "guides/demo-users",
+              "guides/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/overview",
+              "api/venues",
+              "api/interests",
+              "api/recommendations",
+              "api/social",
+              "api/users",
+              "api/action-items"
+            ]
+          },
+          {
+            "group": "Models",
+            "pages": [
+              "api/models/venue",
+              "api/models/user",
+              "api/models/activity",
+              "api/models/action-item"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Intelligent venue recommendations with transparent scoring",
+    "Real-time social activity feed with friend tracking",
+    "Automated booking agent with 5+ user threshold",
+    "Premium SwiftUI interface with hero cards and match meters",
+    "Zero external dependencies on iOS",
+    "Full-stack architecture with FastAPI backend"
+  ],
+  "publicApiSurface": [
+    "GET /venues",
+    "GET /venues/{id}",
+    "POST /interests",
+    "GET /recommendations",
+    "GET /social/feed",
+    "GET /users/{id}",
+    "POST /action-items/{id}/complete",
+    "DELETE /action-items/{id}",
+    "GET /bookings/{user_id}"
+  ]
+}
