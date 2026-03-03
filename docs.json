@@ -38,7 +38,8 @@
               "features/personalized-recommendations",
               "features/social-feed",
               "features/action-items",
-              "features/booking-coordination"
+              "features/booking-coordination",
+              "features/group-chats"
             ]
           },
           {
@@ -83,7 +84,8 @@
               "api/recommendations",
               "api/social",
               "api/users",
-              "api/action-items"
+              "api/action-items",
+              "api/chats"
             ]
           },
           {

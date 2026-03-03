@@ -1,0 +1,230 @@
+---
+title: Group chats
+description: Real-time messaging for coordinating venue visits with friends
+icon: comments
+---
+
+## Overview
+
+Group chats enable seamless coordination when multiple friends want to visit the same venue. Once 2 or more users confirm interest in an action item, Luna automatically creates a group chat where participants can plan logistics, set times, and coordinate transportation.
+
+## How group chats are created
+
+Group chats are created automatically through the action item confirmation flow:
+
+<Steps>
+  <Step title="Action item appears">
+    When 5+ friends express interest in a venue, an action item appears in the **Action Items** tab for all interested users.
+  </Step>
+  
+  <Step title="Users confirm interest">
+    Each user can tap **"Go Ahead"** to confirm they actually want to attend. This moves them from "interested" to "confirmed" status.
+  </Step>
+  
+  <Step title="Chat auto-created at 2+ confirmations">
+    As soon as 2 or more users confirm, Luna automatically creates a group chat and notifies all confirmed participants.
+  </Step>
+  
+  <Step title="Coordinate via chat">
+    Participants can message each other to finalize plans, set meeting times, and coordinate details.
+  </Step>
+</Steps>
+
+<Note>
+  **Threshold**: Only **2+ confirmations** (not 5+ interests) are needed to create a chat. This ensures chats only include people who are serious about attending.
+</Note>
+
+## Accessing chats
+
+There are two ways to access your active chats:
+
+### From action items tab
+
+1. Navigate to the **Action Items** tab (third tab in the main navigation)
+2. Look for action items with a **"Chat Available"** badge
+3. Tap **"View Chat"** to open the group conversation
+
+### From profile tab
+
+1. Go to the **Profile** tab
+2. Scroll to the **Active Chats** section
+3. Tap any chat card to open the conversation
+
+Each chat card displays:
+- Venue name and category
+- Number of participants
+- Most recent message preview
+- Timestamp of last activity
+
+## Chat interface
+
+The chat interface includes:
+
+### Header
+- **Venue photo and name** - Visual reminder of what you're coordinating
+- **Participant avatars** - See who's in the conversation at a glance
+- **Participant count** - Shows total confirmed users
+
+### Message list
+- **Scrollable message history** - All messages from oldest to newest
+- **Sender avatars** - Each message shows who sent it
+- **Timestamps** - Relative time for recent messages (e.g., "2m ago")
+- **Your messages highlighted** - Your own messages appear with a different background color
+
+### Input bar
+- **Text field** - Type messages up to 1,000 characters
+- **Send button** - Tap to send (or press Return on keyboard)
+- **Auto-scroll** - New messages automatically scroll into view
+
+## Real-time updates
+
+Chats use **5-second polling** to keep messages synchronized:
+
+- New messages appear automatically without manual refresh
+- Polling only runs while the chat view is active
+- Polling stops when you navigate away to conserve battery
+- Pull-to-refresh manually fetches latest messages
+
+<Tip>
+  Messages sent by you appear **instantly** with optimistic UI updates, then sync with the server in the background.
+</Tip>
+
+## Message features
+
+### Supported content
+- Plain text messages (1-1,000 characters)
+- Emoji and special characters
+- Multi-line messages (press Shift+Return)
+
+### Message metadata
+Each message includes:
+- Sender name and avatar
+- Send timestamp (relative or absolute)
+- Delivery confirmation (checkmark icon)
+
+<Info>
+  **Future enhancements**: Photo sharing, location pins, and venue booking links are planned for future releases.
+</Info>
+
+## Chat lifecycle
+
+### Active chats
+Chats remain **active** as long as the associated action item is active. Active chats appear in:
+- Action Items tab (with "View Chat" button)
+- Profile tab → Active Chats section
+
+### Archived chats
+When an action item expires or is dismissed, the chat moves to **archived** status:
+- Messages are preserved but read-only
+- No new messages can be sent
+- Archived chats can be viewed in Profile → Archived Action Items
+
+### Deleted chats
+If an action item is permanently deleted from the archive, the associated chat and all messages are also deleted. This action cannot be undone.
+
+<Warning>
+  **Permanent deletion**: Deleting an archived action item also deletes the chat history. Make sure you've saved any important information first!
+</Warning>
+
+## Privacy and permissions
+
+### Who can see chats
+- Only **confirmed participants** can view chat messages
+- Users who only expressed interest (but didn't confirm) cannot access the chat
+- Chats are private to the participant group
+
+### Who can send messages
+- Any confirmed participant can send messages
+- Non-participants receive a 403 error if they attempt to send
+- The backend validates sender permissions on every message
+
+### Leaving a chat
+Currently, participants cannot manually leave a chat. To stop receiving updates:
+1. Navigate away from the chat view (polling stops)
+2. Dismiss the parent action item (moves chat to archive)
+
+<Note>
+  **Manual leave**: The ability to leave a chat while keeping it active for others is planned for a future release.
+</Note>
+
+## Use cases
+
+### Scenario 1: Spontaneous dinner
+> **Jordan** and **Morgan** both interested in "Gramercy Tavern"  
+> Action item appears → Both confirm → Chat created  
+> They coordinate: "7pm tonight?" → "Perfect, see you there!"
+
+### Scenario 2: Concert planning
+> **5 friends** interested in "Blue Note Jazz Club"  
+> Action item appears for all  
+> **3 confirm** → Chat created with those 3  
+> Remaining 2 can still join by confirming later
+
+### Scenario 3: Weekend brunch
+> **Alex**, **Sam**, and **Jordan** confirm "Balthazar"  
+> Chat created → Discuss timing  
+> Settle on "Sunday 11am" → Coordinate Uber pool
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Chat not appearing after confirmation">
+    **Check these:**
+    - Ensure at least 2 users (including you) have confirmed
+    - Pull down to refresh the Action Items list
+    - Check Profile → Active Chats section
+    - Verify backend is running and reachable
+    
+    If the issue persists, check the Xcode console for API errors.
+  </Accordion>
+  
+  <Accordion title="Messages not updating in real-time">
+    **Polling might be stopped:**
+    - Navigate away and back to the chat to restart polling
+    - Pull to refresh manually
+    - Check your network connection
+    - Verify backend server is running
+    
+    **Background app:**
+    - Polling stops when app is backgrounded
+    - Reopen the chat view to resume polling
+  </Accordion>
+  
+  <Accordion title="Can't send messages">
+    **Common causes:**
+    - You're not a confirmed participant (confirm interest first)
+    - Action item has been dismissed or expired
+    - Network connectivity issue
+    - Backend server not reachable
+    
+    Check the error message in the app for specific details.
+  </Accordion>
+  
+  <Accordion title="Old messages missing">
+    **Message history:**
+    - All messages are preserved until the action item is deleted
+    - Scroll up to load earlier messages
+    - If action item was permanently deleted, messages are gone
+    
+    **Archival:**
+    - Archived chats retain all message history
+    - Access via Profile → Archived Action Items
+  </Accordion>
+</AccordionGroup>
+
+## Related features
+
+<CardGroup cols={2}>
+  <Card title="Action Items" icon="list-check" href="/features/action-items">
+    Learn how action items trigger chat creation
+  </Card>
+  <Card title="Booking Coordination" icon="calendar-check" href="/features/booking-coordination">
+    Understand the confirmation flow
+  </Card>
+  <Card title="Chat API" icon="code" href="/api/chats">
+    Technical API documentation
+  </Card>
+  <Card title="Social Feed" icon="users" href="/features/social-feed">
+    See friend activity in real-time
+  </Card>
+</CardGroup>
